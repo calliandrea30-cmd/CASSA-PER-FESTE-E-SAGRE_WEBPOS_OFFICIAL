@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id          String        @id @default(uuid())
+  name        String
+  date        DateTime?
+  active      Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  users       User[]
+  stations    Station[]
+  categories  Category[]
+  products    Product[]
+  orders      Order[]
+  cashSessions CashSession[]
+}
+
+model User {
+  id        String   @id @default(uuid())
+  eventId   String
+  username  String
+  password  String
+  pin       String?
+  role      String
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders    Order[]
+}
+
+model Station {
+  id            String          @id @default(uuid())
+  eventId       String
+  name          String
+  status        String          @default("OFFLINE")
+  lastSeenAt    DateTime?
+  createdAt     DateTime        @default(now())
+  event         Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orders        Order[]
+  printerConfigs PrinterConfig[]
+}
+
+// Configurazione stampante associata a una stazione.
+// type: "USB" | "NETWORK"
+// role: "CASHIER" (scontrino cliente) | "KITCHEN" | "BAR" | "PREP" (comande reparto)
+model PrinterConfig {
+  id        String   @id @default(uuid())
+  stationId String
+  name      String   @default("Stampante")
+  type      String   @default("USB")   // "USB" | "NETWORK"
+  role      String   @default("CASHIER") // "CASHIER" | "KITCHEN" | "BAR" | "PREP"
+  // USB
+  usbVendorId  Int?
+  usbProductId Int?
+  // Network (ESC/POS over TCP)
+  networkHost  String?
+  networkPort  Int?    @default(9100)
+  createdAt    DateTime @default(now())
+  station      Station  @relation(fields: [stationId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id         String    @id @default(uuid())
+  eventId    String
+  name       String
+  orderIndex Int       @default(0)
+  quickNotes String?
+  // Reparto di stampa: se definito, i prodotti di questa cat vanno alla stampante di quel ruolo
+  printRole  String?   // "CASHIER" | "KITCHEN" | "BAR" | "PREP"
+  event      Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  products   Product[]
+}
+
+model Product {
+  id            String           @id @default(uuid())
+  eventId       String
+  categoryId    String
+  name          String
+  price         Float
+  available     Boolean          @default(true)
+  stock         Int?             @default(999)
+  popularity    Int              @default(0)
+  department    String?
+  imageUrl      String?
+  lowStockLevel Int              @default(10)
+  isCombo       Boolean          @default(false)
+  comboItems    ComboItem[]      @relation("ComboParent")
+  memberOf      ComboItem[]      @relation("ComboComponent")
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category      Category         @relation(fields: [categoryId], references: [id])
+  orderItems    OrderItem[]
+  variants      ProductVariant[]
+}
+
+model ProductVariant {
+  id         String  @id @default(uuid())
+  productId  String
+  name       String
+  priceDelta Float   @default(0)
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id           String      @id @default(uuid())
+  orderNumber  Int
+  eventId      String
+  stationId    String
+  userId       String
+  status       String      // PENDING | SUSPENDED | STORNATO | COMPLETED
+  totalAmount  Float
+  paymentType  String?     // CASH | CARD
+  customerName String?
+  discount     Float       @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  event        Event       @relation(fields: [eventId], references: [id])
+  station      Station     @relation(fields: [stationId], references: [id])
+  user         User        @relation(fields: [userId], references: [id])
+  items        OrderItem[]
+  session      CashSession? @relation(fields: [sessionId], references: [id])
+  sessionId    String?
+
+  @@index([eventId, orderNumber])
+  @@index([sessionId])
+  @@index([stationId])
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  productId   String
+  variantId   String?
+  variantName String?
+  note        String?
+  quantity    Int
+  priceAtTime Float
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
+}
+
+model PrintJob {
+  id        String   @id @default(uuid())
+  orderId   String
+  stationId String?  // stazione che ha emesso l'ordine (per routing stampa scontrino)
+  printerId String?  // ruolo stampante: CASHIER | KITCHEN | BAR | PREP
+  status    String   @default("QUEUED") // QUEUED | PRINTED | ERROR | SKIPPED
+  payload   String
+  errorMsg  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  printedAt DateTime?
+}
+
+model Setting {
+  id                    String  @id @default("default")
+  headerName            String  @default("SAGRA DEL BORGO")
+  headerAddress         String  @default("")
+  headerVat             String  @default("")
+  headerPhone           String  @default("")
+  headerAlign           String  @default("ct")
+  headerSize            String  @default("NORMAL")
+  bodyFont              String  @default("a")
+  showOriginalPrice     Boolean @default(true)
+  showChangeAndDiscount Boolean @default(true)
+  dateFormat            String  @default("FULL")
+  prepItemSize          String  @default("DOUBLE_HEIGHT")
+  prepNoteSize          String  @default("NORMAL")
+  prepShowMetadata      Boolean @default(true)
+  prepVariantFormat     String  @default("BRACKETS")
+  footerText            String  @default("Grazie e Buon Appetito!")
+  footerShowCount       Boolean @default(true)
+}
+
+model CashSession {
+  id          String    @id @default(uuid())
+  eventId     String
+  openedAt    DateTime  @default(now())
+  initialCash Float     @default(0)
+  closedAt    DateTime?
+  status      String    @default("OPEN") // OPEN | CLOSED
+  notes       String?
+  event       Event     @relation(fields: [eventId], references: [id])
+  orders      Order[]
+}
+
+model ComboItem {
+  id          String  @id @default(uuid())
+  comboId     String
+  combo       Product @relation("ComboParent", fields: [comboId], references: [id], onDelete: Cascade)
+  componentId String
+  component   Product @relation("ComboComponent", fields: [componentId], references: [id], onDelete: Cascade)
+  quantity    Int     @default(1)
+}

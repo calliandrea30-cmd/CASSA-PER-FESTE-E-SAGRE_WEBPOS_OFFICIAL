@@ -1,0 +1,124 @@
+{
+  "name": "sagrapos",
+  "version": "2.0.0",
+  "description": "Sistema POS per sagre ed eventi — avvia tutto con un clic",
+  "main": "src/main.js",
+  "author": "SagraPOS",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build:api": "cd ../api && npx tsc --noEmit false 2>/dev/null || true",
+    "build:web": "cd ../web && npx next build",
+    "build:agent": "cd ../print-agent && npx tsc 2>/dev/null || true",
+    "build:all": "npm run build:api && npm run build:web && npm run build:agent",
+    "pack": "electron-builder --dir",
+    "dist": "npm run build:all && electron-builder",
+    "dist:mac": "npm run build:all && electron-builder --mac",
+    "dist:win": "npm run build:all && electron-builder --win",
+    "dist:linux": "npm run build:all && electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "it.sagrapos.launcher",
+    "productName": "SagraPOS",
+    "asar": true,
+    "directories": {
+      "output": "dist-app",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "!src/ui/node_modules"
+    ],
+    "extraResources": [
+      {
+        "from": "../api/dist",
+        "to": "api/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../api/node_modules",
+        "to": "api/node_modules",
+        "filter": ["**/*", "!**/*.md", "!**/test/**", "!**/tests/**", "!**/.bin/**"]
+      },
+      {
+        "from": "../api/prisma",
+        "to": "api/prisma"
+      },
+      {
+        "from": "../web/.next",
+        "to": "web/.next",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../web/public",
+        "to": "web/public"
+      },
+      {
+        "from": "../web/node_modules",
+        "to": "web/node_modules",
+        "filter": ["**/*", "!**/*.md", "!**/test/**"]
+      },
+      {
+        "from": "../web/package.json",
+        "to": "web/package.json"
+      },
+      {
+        "from": "../print-agent/dist",
+        "to": "agent/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../print-agent/node_modules",
+        "to": "agent/node_modules",
+        "filter": ["**/*", "!**/*.md"]
+      }
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.business",
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ]
+    },
+    "dmg": {
+      "title": "SagraPOS Installer",
+      "contents": [
+        { "x": 410, "y": 150, "type": "link", "path": "/Applications" },
+        { "x": 130, "y": 150, "type": "file" }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SagraPOS"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ]
+    }
+  }
+}

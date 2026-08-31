@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SagraPOS — Configurazione</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-base text-white select-none">
+
+  <div class="setup-container">
+
+    <!-- ── Step 1: Benvenuto ── -->
+    <div class="setup-step" id="step1">
+      <div class="setup-icon">🏪</div>
+      <h1 class="setup-title">Benvenuto in SagraPOS</h1>
+      <p class="setup-sub">Configura questo computer in pochi secondi.</p>
+      <p class="setup-sub">Questo computer è il <strong>server principale</strong> della cassa?</p>
+
+      <div class="setup-choices">
+        <button class="choice-btn choice-yes" onclick="chooseServer(true)">
+          <span class="choice-icon">🖥️</span>
+          <span class="choice-title">SÌ — Server Principale</span>
+          <span class="choice-desc">Avvia tutto su questo computer.<br>Gestisce database, web e stampante.</span>
+        </button>
+        <button class="choice-btn choice-no" onclick="chooseServer(false)">
+          <span class="choice-icon">💻</span>
+          <span class="choice-title">NO — Cassa Aggiuntiva</span>
+          <span class="choice-desc">Si collega al server già avviato.<br>Gestisce solo la stampante locale.</span>
+        </button>
+      </div>
+
+      <p class="setup-hint">💡 Il server principale va avviato <strong>prima</strong> di tutte le altre casse.</p>
+    </div>
+
+    <!-- ── Step 2: IP Server (solo client) ── -->
+    <div class="setup-step hidden" id="step2">
+      <div class="setup-icon">🔗</div>
+      <h1 class="setup-title">Connetti al Server</h1>
+      <p class="setup-sub">Inserisci l'indirizzo IP del computer server.<br>Puoi trovarlo nella finestra SagraPOS aperta sul server.</p>
+
+      <div class="setup-field">
+        <label>Indirizzo IP del Server</label>
+        <div class="ip-input-row">
+          <input type="text" id="serverIpInput" class="input-field"
+            placeholder="es. 192.168.1.10"
+            autocomplete="off" spellcheck="false">
+          <button class="btn btn-secondary" onclick="testConnection()">
+            🔍 Testa
+          </button>
+        </div>
+        <div id="connResult" class="conn-result hidden"></div>
+      </div>
+
+      <div class="setup-actions">
+        <button class="btn btn-ghost" onclick="goStep(1)">← Indietro</button>
+        <button class="btn btn-primary" id="btnNext2" onclick="goStep(3)" disabled>Avanti →</button>
+      </div>
+    </div>
+
+    <!-- ── Step 3: Conferma ── -->
+    <div class="setup-step hidden" id="step3">
+      <div class="setup-icon">✅</div>
+      <h1 class="setup-title">Tutto Pronto!</h1>
+
+      <div class="summary-box" id="summaryBox">
+        <!-- Riempito via JS -->
+      </div>
+
+      <div class="node-status" id="nodeStatus">
+        <div class="spinner"></div> Controllo Node.js...
+      </div>
+
+      <div class="setup-actions">
+        <button class="btn btn-ghost" onclick="goBack3()">← Indietro</button>
+        <button class="btn btn-primary btn-lg" id="btnConfirm" onclick="confirm3()" disabled>
+          🚀 Avvia SagraPOS
+        </button>
+      </div>
+
+      <div id="nodeError" class="node-error hidden">
+        <p>⚠️ <strong>Node.js non trovato!</strong></p>
+        <p>Per funzionare, SagraPOS richiede Node.js installato sul computer.</p>
+        <button class="btn btn-warning" onclick="openNodeSite()">📥 Scarica Node.js (gratis)</button>
+        <p class="setup-hint">Dopo l'installazione, riavvia SagraPOS.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+  'use strict';
+
+  const api = window.sagrapos;
+  let selectedIsServer = true;
+  let serverIp = '';
+  let nodeFound = false;
+
+  async function goStep(n) {
+    document.querySelectorAll('.setup-step').forEach(el => el.classList.add('hidden'));
+    document.getElementById(`step${n}`).classList.remove('hidden');
+
+    if (n === 3) await initStep3();
+  }
+
+  function chooseServer(isServer) {
+    selectedIsServer = isServer;
+    if (isServer) goStep(3);
+    else goStep(2);
+  }
+
+  function goBack3() {
+    goStep(selectedIsServer ? 1 : 2);
+  }
+
+  // ── Step 2: test connessione ────────────────────────────────────────────────
+  async function testConnection() {
+    const ip = document.getElementById('serverIpInput').value.trim();
+    if (!ip) return;
+    serverIp = ip;
+    const url = `http://${ip}:3001`;
+    const res = document.getElementById('connResult');
+    res.className = 'conn-result';
+    res.textContent = '⏳ Connessione in corso...';
+
+    const result = await api.testServer(url);
+    if (result.ok) {
+      res.className = 'conn-result conn-ok';
+      res.textContent = '✅ Server raggiungibile!';
+      document.getElementById('btnNext2').disabled = false;
+    } else {
+      res.className = 'conn-result conn-err';
+      res.textContent = `❌ Server non raggiungibile su ${url}\n   Assicurati che il server sia avviato e connesso alla stessa rete.`;
+      document.getElementById('btnNext2').disabled = true;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('serverIpInput');
+    if (input) {
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') testConnection();
+      });
+    }
+  });
+
+  // ── Step 3: summary + check Node ───────────────────────────────────────────
+  async function initStep3() {
+    // Summary
+    const box = document.getElementById('summaryBox');
+    if (selectedIsServer) {
+      box.innerHTML = `
+        <div class="summary-row"><span>Modalità:</span><strong>🖥️ Server Principale</strong></div>
+        <div class="summary-row"><span>API Server:</span><strong>porta 3001</strong></div>
+        <div class="summary-row"><span>Interfaccia Web:</span><strong>porta 3000</strong></div>
+        <div class="summary-row"><span>Stampante:</span><strong>locale</strong></div>
+      `;
+    } else {
+      const ip = document.getElementById('serverIpInput').value.trim() || serverIp;
+      box.innerHTML = `
+        <div class="summary-row"><span>Modalità:</span><strong>💻 Cassa Aggiuntiva</strong></div>
+        <div class="summary-row"><span>Server:</span><strong>http://${ip}:3001</strong></div>
+        <div class="summary-row"><span>Web App:</span><strong>http://${ip}:3000</strong></div>
+        <div class="summary-row"><span>Stampante:</span><strong>locale</strong></div>
+      `;
+    }
+
+    // Controlla Node.js
+    document.getElementById('nodeStatus').innerHTML = '<div class="spinner"></div> Controllo Node.js...';
+    document.getElementById('nodeError').classList.add('hidden');
+    document.getElementById('btnConfirm').disabled = true;
+
+    const nodeInfo = await api.getNodeInfo();
+    nodeFound = nodeInfo.found;
+
+    if (nodeFound) {
+      document.getElementById('nodeStatus').innerHTML =
+        `<span class="node-ok">✅ Node.js ${nodeInfo.version} trovato</span>`;
+      document.getElementById('btnConfirm').disabled = false;
+    } else {
+      document.getElementById('nodeStatus').classList.add('hidden');
+      document.getElementById('nodeError').classList.remove('hidden');
+    }
+  }
+
+  async function confirm3() {
+    if (!nodeFound) return;
+
+    const ip = selectedIsServer ? '127.0.0.1' : (document.getElementById('serverIpInput').value.trim() || serverIp);
+    const serverUrl = `http://${ip}:3001`;
+
+    await api.completeSetup({
+      isServer: selectedIsServer,
+      serverUrl,
+    });
+  }
+
+  function openNodeSite() {
+    window.open('https://nodejs.org', '_blank');
+  }
+  </script>
+</body>
+</html>

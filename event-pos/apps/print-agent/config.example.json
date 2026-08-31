@@ -1,0 +1,28 @@
+{
+  "_comment": "Configurazione Print Agent — SagraPOS",
+  "_istruzioni": "Modifica questo file e riavvia il print-agent. Non cancellare questo file.",
+
+  "SERVER_URL": "http://127.0.0.1:3001",
+  "STATION_ID": "",
+  "AGENT_ID": "agent-cassa-1",
+
+  "_comment_printers": "Configura qui le stampanti locali. type: USB | NETWORK. role: CASHIER | KITCHEN | BAR | PREP",
+  "printers": [
+    {
+      "_esempio_usb": "Scontrino USB — sostituisci VID e PID con quelli della tua stampante",
+      "name": "Scontrino Cassa",
+      "type": "USB",
+      "role": "CASHIER",
+      "usbVendorId": "0x1FC9",
+      "usbProductId": "0x2016"
+    },
+    {
+      "_esempio_rete": "Stampante cucina su rete IP — disabilita o rimuovi se non presente",
+      "name": "Cucina",
+      "type": "NETWORK",
+      "role": "KITCHEN",
+      "networkHost": "192.168.1.150",
+      "networkPort": 9100
+    }
+  ]
+}

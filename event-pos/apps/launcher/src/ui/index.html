@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SagraPOS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-base text-white select-none">
+
+  <!-- ── Header ── -->
+  <header class="header drag">
+    <div class="header-left no-drag">
+      <!-- spazio per titlebar macOS -->
+    </div>
+    <div class="header-center">
+      <span class="logo">🏪 SagraPOS</span>
+      <span class="version" id="modeLabel">...</span>
+    </div>
+    <div class="header-right no-drag">
+      <div class="dot" id="dotApi" title="API Server"></div>
+      <div class="dot" id="dotWeb" title="Web App"></div>
+      <div class="dot" id="dotAgent" title="Print Agent"></div>
+    </div>
+  </header>
+
+  <!-- ── Corpo principale ── -->
+  <main>
+
+    <!-- Stato servizi -->
+    <section class="services-grid">
+      <div class="service-card" id="cardApi">
+        <div class="service-icon">⚙️</div>
+        <div class="service-info">
+          <div class="service-name">API Server</div>
+          <div class="service-status" id="statusApi">In attesa...</div>
+        </div>
+        <div class="badge" id="badgeApi">—</div>
+      </div>
+
+      <div class="service-card" id="cardWeb">
+        <div class="service-icon">🌐</div>
+        <div class="service-info">
+          <div class="service-name">Interfaccia Web</div>
+          <div class="service-status" id="statusWeb">In attesa...</div>
+        </div>
+        <div class="badge" id="badgeWeb">—</div>
+      </div>
+
+      <div class="service-card" id="cardAgent">
+        <div class="service-icon">🖨️</div>
+        <div class="service-info">
+          <div class="service-name">Stampante</div>
+          <div class="service-status" id="statusAgent">In attesa...</div>
+        </div>
+        <div class="badge" id="badgeAgent">—</div>
+      </div>
+    </section>
+
+    <!-- Info rete (solo SERVER) -->
+    <section class="network-info hidden" id="networkInfo">
+      <div class="net-title">📡 URL per le Casse Aggiuntive</div>
+      <div class="net-url" id="netUrl">—</div>
+      <div class="net-hint">Apri questo indirizzo su ogni altro computer cassa</div>
+    </section>
+
+    <!-- Pulsanti azione -->
+    <section class="actions">
+      <button class="btn btn-primary btn-lg" id="btnOpenCassa" onclick="openCassa()">
+        🖥️ Apri Cassa
+      </button>
+      <button class="btn btn-secondary" id="btnAdmin" onclick="openAdmin()">
+        ⚙️ Admin
+      </button>
+      <button class="btn btn-ghost" id="btnRestart" onclick="restart()">
+        🔄 Riavvia
+      </button>
+    </section>
+
+    <!-- Log console -->
+    <section class="log-section">
+      <div class="log-header">
+        <span>📋 Log</span>
+        <button class="btn-mini" onclick="clearLogs()">Pulisci</button>
+      </div>
+      <div class="log-box" id="logBox"></div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ── -->
+  <footer class="footer">
+    <button class="btn-text" id="btnSettings" onclick="openSettings()">⚙ Impostazioni</button>
+    <span class="sep">|</span>
+    <button class="btn-text" id="btnStop" onclick="stopAll()">🛑 Ferma Tutto</button>
+    <span class="sep">|</span>
+    <span class="footer-version">SagraPOS v2.0</span>
+  </footer>
+
+  <script>
+  'use strict';
+
+  const api = window.sagrapos;
+  let currentStatus = { api: false, web: false, agent: false };
+  let isServer = true;
+
+  // ── Inizializzazione ────────────────────────────────────────────────────────
+  async function init() {
+    const cfg = await api.getConfig();
+    isServer = cfg.isServer !== false;
+
+    // Imposta label modalità
+    document.getElementById('modeLabel').textContent = isServer ? 'SERVER' : 'CASSA CLIENT';
+    document.getElementById('modeLabel').className = `version ${isServer ? 'badge-server' : 'badge-client'}`;
+
+    // Info rete
+    if (isServer) {
+      document.getElementById('networkInfo').classList.remove('hidden');
+    }
+
+    // Carica log precedenti
+    const logs = await api.getLogs();
+    logs.forEach(addLogLine);
+
+    // Stato iniziale
+    const status = await api.getStatus();
+    renderStatus(status);
+
+    // Listener live
+    api.onStatus(renderStatus);
+    api.onLog(addLogLine);
+    api.onStarting(() => {
+      addLogLine('⚡ Avvio in corso...');
+    });
+  }
+
+  // ── Render status ───────────────────────────────────────────────────────────
+  function renderStatus(s) {
+    currentStatus = s;
+
+    setService('Api',   s.api,   s.api   ? '3001' : '—', s.api   ? 'Attivo' : 'Spento');
+    setService('Web',   s.web,   s.web   ? '3000' : '—', s.web   ? 'Attivo' : (isServer ? 'Spento' : 'N/A'));
+    setService('Agent', s.agent, s.agent ? 'OK'   : '—', s.agent ? 'Connesso' : 'Spento');
+
+    // Dot status nell'header
+    setDot('dotApi',   s.api);
+    setDot('dotWeb',   s.web || !isServer);
+    setDot('dotAgent', s.agent);
+
+    // Network info
+    if (s.localIPs && s.localIPs.length > 0 && isServer) {
+      const url = `http://${s.localIPs[0]}:3000`;
+      document.getElementById('netUrl').textContent = url;
+    }
+
+    // Abilita pulsante cassa
+    const allOk = s.api && (isServer ? s.web : true);
+    document.getElementById('btnOpenCassa').disabled = !allOk;
+    document.getElementById('btnOpenCassa').className = allOk
+      ? 'btn btn-primary btn-lg pulse'
+      : 'btn btn-primary btn-lg disabled';
+  }
+
+  function setService(name, active, port, label) {
+    const card   = document.getElementById(`card${name}`);
+    const badge  = document.getElementById(`badge${name}`);
+    const status = document.getElementById(`status${name}`);
+    card.className  = `service-card ${active ? 'active' : 'inactive'}`;
+    badge.textContent = port;
+    badge.className   = `badge ${active ? 'badge-on' : 'badge-off'}`;
+    status.textContent = label;
+  }
+
+  function setDot(id, active) {
+    document.getElementById(id).className = `dot ${active ? 'dot-on' : 'dot-off'}`;
+  }
+
+  // ── Log ─────────────────────────────────────────────────────────────────────
+  function addLogLine(line) {
+    const box = document.getElementById('logBox');
+    const div = document.createElement('div');
+    div.className = 'log-line';
+    div.textContent = line;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    // Limita a 100 righe visibili
+    while (box.children.length > 100) box.removeChild(box.firstChild);
+  }
+
+  function clearLogs() {
+    document.getElementById('logBox').innerHTML = '';
+  }
+
+  // ── Azioni ──────────────────────────────────────────────────────────────────
+  function openCassa() { api.openBrowser(); }
+  function openAdmin()  { api.openAdmin();  }
+  function stopAll() {
+    if (confirm('Fermare tutti i servizi di SagraPOS?')) api.stopAll();
+  }
+  function openSettings() { api.openSetup(); }
+
+  async function restart() {
+    await api.stopAll();
+    setTimeout(() => api.startAll(), 1000);
+  }
+
+  // ── Avvio ────────────────────────────────────────────────────────────────────
+  init();
+  </script>
+</body>
+</html>

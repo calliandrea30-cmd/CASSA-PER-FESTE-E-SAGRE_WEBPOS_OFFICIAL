@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  # The main Web/API server
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    volumes:
+      # Map the database folder to persist data across restarts
+      - ./apps/api/prisma:/app/apps/api/prisma
+    restart: always
+    environment:
+      - NODE_ENV=production
+
+  # The print-agent for PC 1
+

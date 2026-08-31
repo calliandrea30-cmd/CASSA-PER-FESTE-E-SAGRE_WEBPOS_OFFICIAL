@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  print-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.print
+    ports:
+      - "3002:3002"
+    restart: always
+    environment:
+      # NOTE: Sostituisci questo IP con l'indirizzo IP del PC 1 (es. http://192.168.1.50:3001)
+      - SERVER_URL=${SERVER_URL:-http://192.168.1.100:3001}
+    privileged: true
+    devices:
+      - "/dev/bus/usb:/dev/bus/usb"
