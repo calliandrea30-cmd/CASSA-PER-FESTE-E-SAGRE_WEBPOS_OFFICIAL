@@ -173,9 +173,15 @@ model Setting {
   prepNoteSize          String  @default("NORMAL")
   prepShowMetadata      Boolean @default(true)
   prepVariantFormat     String  @default("BRACKETS")
-  footerText            String  @default("Grazie e Buon Appetito!")
+  footerText            String  @default("GRAZIE\nPER AVER SCELTO LA NOSTRA SAGRA!")
   footerShowCount       Boolean @default(true)
   printToDepartments   Boolean @default(false) // se true, invia copie comanda alle stampanti dei singoli distretti (Cucina, Bar)
+  headerSubtitle        String  @default("AREA FESTE · VIA ASILO\nCAVAGLIO D'AGOGNA (NO)")
+  headerLogoBase64      String? // Immagine PNG base64 per logo testata scontrino
+  footerLogoBase64      String? // Immagine PNG base64 per grafica piè di pagina scontrino
+  comandaGreeting       String  @default("Buona Sagra! ★")
+  comandaShowHeader     Boolean @default(true)
+  comandaShowPrice      Boolean @default(true)
 }
 
 model CashSession {

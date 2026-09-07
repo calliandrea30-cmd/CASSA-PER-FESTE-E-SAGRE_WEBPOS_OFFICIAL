@@ -46,12 +46,18 @@ export default function AdminDashboard() {
   });
 
   const [settings, setSettings] = useState({
-    headerName: "", headerAddress: "", headerVat: "", headerPhone: "",
+    headerName: "CAVAGLIO SOTTO LE STELLE",
+    headerSubtitle: "AREA FESTE · VIA ASILO\nCAVAGLIO D'AGOGNA (NO)",
+    headerAddress: "", headerVat: "", headerPhone: "",
     headerAlign: "ct", headerSize: "NORMAL",
+    headerLogoBase64: "", footerLogoBase64: "",
     bodyFont: "a", showOriginalPrice: true, showChangeAndDiscount: true,
     dateFormat: "FULL", prepItemSize: "DOUBLE_HEIGHT", prepNoteSize: "NORMAL",
     prepShowMetadata: true, prepVariantFormat: "BRACKETS",
-    footerText: "", footerShowCount: true,
+    footerText: "GRAZIE\nPER AVER SCELTO LA NOSTRA SAGRA!", footerShowCount: true,
+    comandaGreeting: "Buona Sagra! ★",
+    comandaShowHeader: true,
+    comandaShowPrice: true,
     printToDepartments: false,
   });
 
@@ -192,6 +198,25 @@ export default function AdminDashboard() {
     } catch {
       alert("Errore invio stampa");
     }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'headerLogoBase64' | 'footerLogoBase64') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.includes('png') && !file.type.includes('image')) {
+      alert("Seleziona un'immagine in formato PNG");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const b64 = ev.target?.result as string;
+      setSettings(s => ({ ...s, [field]: b64 }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeLogo = (field: 'headerLogoBase64' | 'footerLogoBase64') => {
+    setSettings(s => ({ ...s, [field]: "" }));
   };
 
   // ── Report X / Chiusura Z ──────────────────────────────────────────────────
@@ -1015,65 +1040,158 @@ export default function AdminDashboard() {
 
           {/* ── TAB: IMPOSTAZIONI ── */}
           {activeTab === "IMPOSTAZIONI" && (
-            <div className="flex gap-6">
+            <div className="flex flex-col lg:flex-row gap-6">
               <div className="flex-1 bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant flex flex-col gap-6">
                 <div className="flex justify-between items-center border-b border-outline-variant/30 pb-4">
-                  <h3 className="font-headline-lg text-[24px] font-black text-on-background">Editor Scontrini e Comande</h3>
+                  <div>
+                    <h3 className="font-headline-lg text-[24px] font-black text-on-background">Personalizzazione Scontrini & Comande</h3>
+                    <p className="text-xs text-neutral">Configura logo, grafiche, testi e opzioni di stampa per la stampante termica 80mm</p>
+                  </div>
                   <div className="flex gap-2">
                     <button onClick={() => applyPreset("ECO")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🌱 Eco</button>
-                    <button onClick={() => applyPreset("RESTO")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🍽️ Ristorante</button>
-                    <button onClick={() => applyPreset("BAR")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🍺 Bar</button>
+                    <button onClick={() => applyPreset("RESTO")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🍽️ Sagra / Ristorante</button>
+                    <button onClick={() => applyPreset("BAR")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🍺 Solo Bar</button>
                   </div>
                 </div>
-                <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">A) Intestazione</h4>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <input type="text" placeholder="Nome Locale" value={settings.headerName} onChange={e => setSettings(s => ({ ...s, headerName: e.target.value }))} className="bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
-                    <input type="text" placeholder="Indirizzo" value={settings.headerAddress} onChange={e => setSettings(s => ({ ...s, headerAddress: e.target.value }))} className="bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
-                    <input type="text" placeholder="P.IVA" value={settings.headerVat} onChange={e => setSettings(s => ({ ...s, headerVat: e.target.value }))} className="bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
-                    <input type="text" placeholder="Telefono" value={settings.headerPhone} onChange={e => setSettings(s => ({ ...s, headerPhone: e.target.value }))} className="bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
+
+                {/* ── Sezione Immagini PNG ── */}
+                <div className="bg-surface-container-high p-5 rounded-2xl border border-primary/20">
+                  <h4 className="font-bold text-[16px] text-primary mb-2 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[20px]">image</span> Logo e Grafiche Personalizzate (Formato PNG)
+                  </h4>
+                  <p className="text-xs text-neutral mb-4">
+                    Carica le immagini in formato PNG (consigliate in bianco e nero o monocromatiche ad alto contrasto per la stampa termica).
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Logo Testata */}
+                    <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col items-center text-center">
+                      <span className="text-xs font-bold text-neutral uppercase tracking-wider mb-2">Logo Testata Scontrino (In Alto)</span>
+                      {settings.headerLogoBase64 ? (
+                        <div className="flex flex-col items-center gap-2 w-full">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={settings.headerLogoBase64} alt="Logo Testata" className="max-h-20 max-w-full object-contain p-2 bg-white rounded-lg border border-outline-variant" />
+                          <div className="flex gap-2 mt-1">
+                            <label className="text-xs bg-surface-container-highest px-3 py-1.5 rounded-lg font-bold cursor-pointer hover:bg-outline-variant transition-colors">
+                              Sostituisci
+                              <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'headerLogoBase64')} className="hidden" />
+                            </label>
+                            <button onClick={() => removeLogo('headerLogoBase64')} className="text-xs bg-error/10 text-error hover:bg-error hover:text-white px-3 py-1.5 rounded-lg font-bold transition-colors">
+                              Rimuovi
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="w-full flex flex-col items-center justify-center p-5 border-2 border-dashed border-outline-variant hover:border-primary rounded-xl cursor-pointer transition-colors bg-background/50">
+                          <span className="material-symbols-outlined text-3xl text-neutral mb-1">upload_file</span>
+                          <span className="text-xs font-bold text-primary">Carica Logo Testata (PNG)</span>
+                          <span className="text-[10px] text-neutral mt-0.5">Larghezza ideale: 384-512px</span>
+                          <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'headerLogoBase64')} className="hidden" />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Grafica Piè di Pagina */}
+                    <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col items-center text-center">
+                      <span className="text-xs font-bold text-neutral uppercase tracking-wider mb-2">Grafica Piè di Pagina (In Basso)</span>
+                      {settings.footerLogoBase64 ? (
+                        <div className="flex flex-col items-center gap-2 w-full">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={settings.footerLogoBase64} alt="Grafica Footer" className="max-h-20 max-w-full object-contain p-2 bg-white rounded-lg border border-outline-variant" />
+                          <div className="flex gap-2 mt-1">
+                            <label className="text-xs bg-surface-container-highest px-3 py-1.5 rounded-lg font-bold cursor-pointer hover:bg-outline-variant transition-colors">
+                              Sostituisci
+                              <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'footerLogoBase64')} className="hidden" />
+                            </label>
+                            <button onClick={() => removeLogo('footerLogoBase64')} className="text-xs bg-error/10 text-error hover:bg-error hover:text-white px-3 py-1.5 rounded-lg font-bold transition-colors">
+                              Rimuovi
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="w-full flex flex-col items-center justify-center p-5 border-2 border-dashed border-outline-variant hover:border-primary rounded-xl cursor-pointer transition-colors bg-background/50">
+                          <span className="material-symbols-outlined text-3xl text-neutral mb-1">wallpaper</span>
+                          <span className="text-xs font-bold text-primary">Carica Grafica Piè di Pagina (PNG)</span>
+                          <span className="text-[10px] text-neutral mt-0.5">Es. silhouette, skyline o sponsor</span>
+                          <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'footerLogoBase64')} className="hidden" />
+                        </label>
+                      )}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                </div>
+
+                {/* ── Sezione A: Testata Scontrino ── */}
+                <div className="bg-surface-container-high p-4 rounded-xl">
+                  <h4 className="font-bold text-[16px] text-primary mb-3">A) Testata e Indirizzo</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                     <div>
-                      <label className="text-xs text-neutral block mb-1">Allineamento</label>
-                      <select value={settings.headerAlign} onChange={e => setSettings(s => ({ ...s, headerAlign: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm">
-                        <option value="lt">Sinistra</option><option value="ct">Centro</option>
-                      </select>
+                      <label className="text-xs text-neutral block mb-1">Nome / Titolo Evento (se non usi logo PNG)</label>
+                      <input type="text" placeholder="es. CAVAGLIO SOTTO LE STELLE" value={settings.headerName} onChange={e => setSettings(s => ({ ...s, headerName: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold" />
                     </div>
                     <div>
-                      <label className="text-xs text-neutral block mb-1">Dimensione</label>
-                      <select value={settings.headerSize} onChange={e => setSettings(s => ({ ...s, headerSize: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm">
-                        <option value="NORMAL">Normale</option><option value="DOUBLE_HEIGHT">Doppia Altezza</option><option value="GIANT">Gigante</option>
+                      <label className="text-xs text-neutral block mb-1">Sottotitolo / Indirizzo / Località (su 2 righe)</label>
+                      <textarea rows={2} placeholder="AREA FESTE · VIA ASILO&#10;CAVAGLIO D'AGOGNA (NO)" value={settings.headerSubtitle} onChange={e => setSettings(s => ({ ...s, headerSubtitle: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm leading-tight" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral block mb-1">P.IVA / Codice Fiscale (opzionale)</label>
+                      <input type="text" placeholder="P.IVA..." value={settings.headerVat} onChange={e => setSettings(s => ({ ...s, headerVat: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral block mb-1">Telefono / Recapito (opzionale)</label>
+                      <input type="text" placeholder="Tel..." value={settings.headerPhone} onChange={e => setSettings(s => ({ ...s, headerPhone: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Sezione B: Corpo Scontrino ── */}
+                <div className="bg-surface-container-high p-4 rounded-xl">
+                  <h4 className="font-bold text-[16px] text-primary mb-3">B) Corpo Scontrino e Opzioni</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.showChangeAndDiscount} onChange={e => setSettings(s => ({ ...s, showChangeAndDiscount: e.target.checked }))} className="accent-primary" /> Mostra colonna PREZZO e subtotali</label>
+                    <div>
+                      <label className="text-xs text-neutral block mb-1">Formato Data</label>
+                      <select value={settings.dateFormat} onChange={e => setSettings(s => ({ ...s, dateFormat: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm">
+                        <option value="FULL">Data e Ora complete (GG/MM/AAAA HH:MM)</option>
+                        <option value="SHORT">Solo Ora (HH:MM)</option>
                       </select>
                     </div>
                   </div>
                 </div>
+
+                {/* ── Sezione C: Talloncini Comanda ── */}
                 <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">B) Corpo Conto</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.showChangeAndDiscount} onChange={e => setSettings(s => ({ ...s, showChangeAndDiscount: e.target.checked }))} /> Mostra prezzi e sconti</label>
-                    <div><label className="text-xs text-neutral block mb-1">Font</label><select value={settings.bodyFont} onChange={e => setSettings(s => ({ ...s, bodyFont: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm"><option value="a">Normale (A)</option><option value="b">Piccolo (B)</option></select></div>
-                    <div><label className="text-xs text-neutral block mb-1">Formato Data</label><select value={settings.dateFormat} onChange={e => setSettings(s => ({ ...s, dateFormat: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm"><option value="FULL">Completa</option><option value="SHORT">Solo Ora</option></select></div>
+                  <h4 className="font-bold text-[16px] text-primary mb-3">C) Talloncini Comanda per Articolo</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="text-xs text-neutral block mb-1">Frase di Augurio Finale (es. Buona Sagra! ★)</label>
+                      <input type="text" placeholder="Buona Sagra! ★" value={settings.comandaGreeting} onChange={e => setSettings(s => ({ ...s, comandaGreeting: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-neutral block mb-1">Dimensione Nome Articolo</label>
+                      <select value={settings.prepItemSize} onChange={e => setSettings(s => ({ ...s, prepItemSize: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold">
+                        <option value="DOUBLE_HEIGHT">Doppia Altezza (Consigliato)</option>
+                        <option value="GIANT">Gigante</option>
+                        <option value="NORMAL">Normale</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.comandaShowHeader} onChange={e => setSettings(s => ({ ...s, comandaShowHeader: e.target.checked }))} className="accent-primary" /> Stampa logo/intestazione in cima al talloncino</label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.comandaShowPrice} onChange={e => setSettings(s => ({ ...s, comandaShowPrice: e.target.checked }))} className="accent-primary" /> Stampa il prezzo a lato del nome articolo</label>
                   </div>
                 </div>
+
+                {/* ── Sezione D: Piè di Pagina Scontrino ── */}
                 <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">C) Talloncini Comanda</h4>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div><label className="text-xs text-neutral block mb-1">Dimensione articolo</label><select value={settings.prepItemSize} onChange={e => setSettings(s => ({ ...s, prepItemSize: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm"><option value="NORMAL">Normale</option><option value="DOUBLE_HEIGHT">Doppia Altezza</option><option value="GIANT">Gigante</option></select></div>
-                    <div><label className="text-xs text-neutral block mb-1">Testo Variante</label><select value={settings.prepNoteSize} onChange={e => setSettings(s => ({ ...s, prepNoteSize: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm"><option value="NORMAL">Normale</option><option value="DOUBLE_HEIGHT">Doppia Altezza</option></select></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.prepShowMetadata} onChange={e => setSettings(s => ({ ...s, prepShowMetadata: e.target.checked }))} /> Stampa #Ordine e Orario</label>
-                    <div><label className="text-xs text-neutral block mb-1">Stile Varianti</label><select value={settings.prepVariantFormat} onChange={e => setSettings(s => ({ ...s, prepVariantFormat: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm"><option value="BRACKETS">[Variante]</option><option value="ASTERISK">* Variante</option></select></div>
+                  <h4 className="font-bold text-[16px] text-primary mb-3">D) Ringraziamento e Piè di Pagina Scontrino</h4>
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <label className="text-xs text-neutral block mb-1">Messaggio di Ringraziamento</label>
+                      <textarea rows={2} value={settings.footerText} onChange={e => setSettings(s => ({ ...s, footerText: e.target.value }))} placeholder="GRAZIE&#10;PER AVER SCELTO LA NOSTRA SAGRA!" className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm h-16" />
+                    </div>
                   </div>
                 </div>
-                <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">D) Piè di Pagina</h4>
-                  <div className="flex gap-4">
-                    <textarea value={settings.footerText} onChange={e => setSettings(s => ({ ...s, footerText: e.target.value }))} placeholder="Grazie e Arrivederci!" className="flex-1 bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm h-16" />
-                    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.footerShowCount} onChange={e => setSettings(s => ({ ...s, footerShowCount: e.target.checked }))} /> Conteggio articoli</label>
-                  </div>
-                </div>
+
+                {/* ── Sezione E: Stampa nei Distretti ── */}
                 <div className="bg-surface-container-high p-4 rounded-xl border-2 border-primary/20">
                   <h4 className="font-bold text-[16px] text-primary mb-2 flex items-center gap-2">
                     <span className="material-symbols-outlined text-[20px]">storefront</span> E) Stampa nei Distretti / Reparti (Cucina, Bar)
@@ -1106,37 +1224,143 @@ export default function AdminDashboard() {
                     </div>
                   </label>
                 </div>
+
                 <div className="pt-2 border-t border-outline-variant/30 flex justify-end gap-3">
                   <button onClick={printTest} className="bg-tertiary text-on-tertiary px-6 py-3 rounded-xl font-bold shadow-sm hover:brightness-110">Stampa di Prova</button>
                   <button onClick={saveSettings} className="bg-primary text-on-primary px-8 py-3 rounded-xl font-bold shadow-md hover:brightness-110">Salva Configurazione</button>
                 </div>
               </div>
-              {/* Anteprima scontrino */}
-              <div className="w-[320px] shrink-0 bg-surface-container-highest p-6 rounded-3xl shadow-inner border border-outline-variant flex flex-col">
-                <h4 className="font-bold text-sm text-neutral mb-4 uppercase tracking-widest text-center">Anteprima</h4>
-                <div className="bg-[#FFFFEE] text-black p-4 rounded font-mono text-[11px] shadow-sm flex-1 overflow-y-auto leading-tight" style={{ fontFamily: '"Courier New", Courier, monospace' }}>
-                  <div className={`mb-3 ${settings.headerAlign === "ct" ? "text-center" : "text-left"} ${settings.headerSize === "GIANT" ? "text-[16px] font-black" : settings.headerSize === "DOUBLE_HEIGHT" ? "text-[14px] font-bold" : "font-bold"}`}>{settings.headerName || "RICEVUTA"}</div>
-                  <div className="mb-2 text-center">
-                    {settings.headerAddress && <div>{settings.headerAddress}</div>}
-                    {settings.headerVat && <div>P.IVA: {settings.headerVat}</div>}
+
+              {/* ── Anteprima scontrino fedele alla foto ── */}
+              <div className="w-full lg:w-[350px] shrink-0 bg-surface-container-highest p-6 rounded-3xl shadow-inner border border-outline-variant flex flex-col">
+                <h4 className="font-bold text-sm text-neutral mb-3 uppercase tracking-widest text-center flex items-center justify-center gap-1">
+                  <span className="material-symbols-outlined text-[18px]">receipt</span> Anteprima Live
+                </h4>
+
+                <div className="space-y-4 overflow-y-auto max-h-[850px] pr-1">
+                  {/* Scontrino Cliente */}
+                  <div className="bg-white text-black p-5 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight">
+                    {/* Header con Logo o Nome */}
+                    {settings.headerLogoBase64 ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={settings.headerLogoBase64} alt="Logo" className="max-h-16 mx-auto mb-2 object-contain" />
+                    ) : (
+                      <div className="text-center font-black text-[14px] text-blue-900 tracking-wide mb-1">{settings.headerName || "CAVAGLIO SOTTO LE STELLE"}</div>
+                    )}
+
+                    {/* Sottotitolo / Località */}
+                    <div className="text-center text-[10px] text-neutral/80 uppercase font-sans mb-3 leading-snug">
+                      {settings.headerSubtitle ? (
+                        settings.headerSubtitle.split('\n').map((l, idx) => <div key={idx}>{l}</div>)
+                      ) : (
+                        <>
+                          <div>AREA FESTE · VIA ASILO</div>
+                          <div>CAVAGLIO D&apos;AGOGNA (NO)</div>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="border-b border-black/40 mb-2" />
+
+                    {/* Dati Ordine 2 Colonne */}
+                    <div className="grid grid-cols-2 text-[10px] mb-1 font-sans">
+                      <div>DATA <span className="font-bold">19/07/2026</span></div>
+                      <div className="text-right">ORA <span className="font-bold">21:48</span></div>
+                    </div>
+                    <div className="grid grid-cols-2 text-[10px] mb-2 font-sans">
+                      <div>TAVOLO <span className="font-bold">12</span></div>
+                      <div className="text-right font-bold">N. SCONTRINO 0047</div>
+                    </div>
+
+                    <div className="border-b border-black/40 mb-2" />
+
+                    {/* Tabella Articoli */}
+                    <div className="text-[10px] font-sans font-bold flex justify-between mb-1 text-black/70">
+                      <span className="w-10">Q.TÀ</span>
+                      <span className="flex-1">DESCRIZIONE</span>
+                      <span className="w-12 text-right">PREZZO</span>
+                    </div>
+
+                    <div className="space-y-1 text-[11px] font-sans">
+                      <div className="flex justify-between items-baseline">
+                        <span className="w-10 font-bold">2</span>
+                        <span className="flex-1">Panini con salamella</span>
+                        <span className="w-12 text-right font-medium">6,00</span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="w-10 font-bold">1</span>
+                        <span className="flex-1">Patatine fritte</span>
+                        <span className="w-12 text-right font-medium">3,00</span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="w-10 font-bold">1</span>
+                        <span className="flex-1">Birra piccola</span>
+                        <span className="w-12 text-right font-medium">4,00</span>
+                      </div>
+                      <div className="flex justify-between items-baseline text-green-700">
+                        <span className="w-10 font-bold">1</span>
+                        <span className="flex-1 font-bold">Panino porchetta (OMAGGIO)</span>
+                        <span className="w-12 text-right font-bold">0,00</span>
+                      </div>
+                    </div>
+
+                    <div className="border-b border-black/40 my-3" />
+
+                    {/* Totale */}
+                    <div className="flex justify-between items-baseline font-sans font-black text-[18px] text-black">
+                      <span>TOTALE</span>
+                      <span className="text-[20px]">13,00</span>
+                    </div>
+
+                    <div className="mt-2 text-[10px] font-sans text-neutral uppercase">PAGAMENTO CONTANTI</div>
+
+                    {/* Ringraziamento */}
+                    <div className="mt-4 text-center font-sans text-[11px] uppercase font-bold tracking-wider leading-relaxed text-black/80">
+                      {settings.footerText ? (
+                        settings.footerText.split('\n').map((l, idx) => <div key={idx}>{l}</div>)
+                      ) : (
+                        <>
+                          <div>GRAZIE</div>
+                          <div className="text-[10px] text-neutral">PER AVER SCELTO LA NOSTRA SAGRA!</div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Grafica Piè di Pagina */}
+                    {settings.footerLogoBase64 && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={settings.footerLogoBase64} alt="Grafica Footer" className="max-h-16 mx-auto mt-3 object-contain" />
+                    )}
                   </div>
-                  <div className={settings.bodyFont === "b" ? "text-[9px]" : ""}>
-                    <div>ORDINE #42</div>
-                    <div>{settings.dateFormat === "SHORT" ? "12:34:56" : "15/08/2026 12:34:56"}</div>
-                    <div className="mb-1">--------------------------------</div>
-                    <div className="flex justify-between"><span>1x Birra {settings.prepVariantFormat === "BRACKETS" ? "[Rossa]" : "* Rossa"}</span>{settings.showChangeAndDiscount && <span>4.00</span>}</div>
-                    <div className="flex justify-between"><span>2x Panino</span>{settings.showChangeAndDiscount && <span>11.00</span>}</div>
-                    <div className="mb-1 mt-1">--------------------------------</div>
-                    <div className="text-center font-bold">TOTALE: EUR 15.00</div>
-                    <div className="mt-3 text-center">{settings.footerText}</div>
-                    {settings.footerShowCount && <div className="mt-1">Articoli totali: 3</div>}
+
+                  {/* Talloncino Comanda Singolo */}
+                  <div className="bg-white text-black p-4 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight">
+                    <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans">Esempio Talloncino Articolo</div>
+
+                    {settings.comandaShowHeader && (
+                      <>
+                        {settings.headerLogoBase64 ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={settings.headerLogoBase64} alt="Logo" className="max-h-10 mx-auto mb-1 object-contain" />
+                        ) : (
+                          <div className="text-center font-bold text-[11px] text-blue-900">{settings.headerName || "CAVAGLIO SOTTO LE STELLE"}</div>
+                        )}
+                        <div className="text-center text-[8px] text-neutral uppercase font-sans mb-2">AREA FESTE · CAVAGLIO D&apos;AGOGNA</div>
+                        <div className="border-b border-black/40 mb-2" />
+                      </>
+                    )}
+
+                    <div className="flex justify-between items-center my-2 font-sans font-black text-[14px]">
+                      <span>BIRRA PICCOLA</span>
+                      {settings.comandaShowPrice && <span>4,00</span>}
+                    </div>
+
+                    <div className="border-b border-black/40 my-2" />
+
+                    <div className="text-center font-bold text-[12px] font-sans text-primary my-1">
+                      {settings.comandaGreeting || "Buona Sagra! ★"}
+                    </div>
                   </div>
-                  <div className="my-4 text-neutral/40 text-center">- CUT -</div>
-                  {settings.prepShowMetadata && <><div className="text-center">ORDINE #42 - 12:34:56</div><div className="text-center mb-1">--------------------------------</div></>}
-                  <div className={`text-center font-bold ${settings.prepItemSize === "GIANT" ? "text-[16px]" : settings.prepItemSize === "DOUBLE_HEIGHT" ? "text-[14px]" : ""}`}>1x Birra Media</div>
-                  <div className={`text-center ${settings.prepNoteSize === "DOUBLE_HEIGHT" ? "text-[14px] font-bold" : ""}`}>{settings.prepVariantFormat === "BRACKETS" ? "[Rossa]" : "* Rossa"}</div>
-                  <div className="text-center mt-2">[ BAR ]</div>
-                  <div className="my-4 text-neutral/40 text-center">- CUT -</div>
                 </div>
               </div>
             </div>

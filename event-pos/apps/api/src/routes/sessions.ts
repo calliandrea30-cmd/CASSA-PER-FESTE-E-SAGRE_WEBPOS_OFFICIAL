@@ -114,12 +114,12 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
-    // Emetti il job ai print-agent connessi (no broadcast globale)
+    // Emetti il job ai print-agent connessi
     const rooms = fastify.io.sockets.adapter.rooms;
-    if (rooms.has(`event:${eventId}`)) {
-      fastify.io.to(`event:${eventId}`).emit('print-job', printJob);
-    } else if (rooms.has('print-agents')) {
+    if (rooms.has('print-agents')) {
       fastify.io.to('print-agents').emit('print-job', printJob);
+    } else {
+      fastify.io.emit('print-job', printJob);
     }
     // Se nessun agent connesso, il job è in DB con status QUEUED.
 
@@ -158,12 +158,12 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
-    // Emetti il job ai print-agent (no broadcast globale)
+    // Emetti il job ai print-agent connessi
     const rooms2 = fastify.io.sockets.adapter.rooms;
-    if (rooms2.has(`event:${eventId}`)) {
-      fastify.io.to(`event:${eventId}`).emit('print-job', printJob);
-    } else if (rooms2.has('print-agents')) {
+    if (rooms2.has('print-agents')) {
       fastify.io.to('print-agents').emit('print-job', printJob);
+    } else {
+      fastify.io.emit('print-job', printJob);
     }
 
 

@@ -9,7 +9,8 @@ import os from 'os';
 // @ts-ignore
 import escpos from 'escpos';
 import { getDeviceList } from 'usb';
-
+// @ts-ignore
+const { PNG } = require('pngjs');
 
 dotenv.config();
 
@@ -383,102 +384,236 @@ function getPrinterConfigForRole(role: string, remotePrinters: PrinterConfig[]):
   };
 }
 
-// ─── Helpers stampa ───────────────────────────────────────────────────────────
+// ─── Helpers stampa e formattazione colonne 80mm (48 caratteri) ───────────────
 function applySize(printer: any, sizeStr: string) {
   if (sizeStr === 'GIANT') printer.size(2, 2);
   else if (sizeStr === 'DOUBLE_HEIGHT') printer.size(1, 2);
   else printer.size(1, 1);
 }
 
+function formatTwoColumns(left: string, right: string, width = 48): string {
+  const r = String(right || '').trim();
+  const maxLeft = Math.max(0, width - r.length - 1);
+  const l = (left || '').length > maxLeft ? (left || '').substring(0, maxLeft) : (left || '');
+  const spaces = Math.max(1, width - l.length - r.length);
+  return l + ' '.repeat(spaces) + r;
+}
+
+function formatThreeColumns(col1: string, col2: string, col3: string, w1 = 6, w3 = 8, totalWidth = 48): string {
+  const w2 = Math.max(10, totalWidth - w1 - w3);
+  const c1 = String(col1 || '').padEnd(w1);
+  const rawCol2 = String(col2 || '');
+  const c2 = (rawCol2.length > w2 ? rawCol2.substring(0, w2 - 1) + ' ' : rawCol2).padEnd(w2);
+  const c3 = String(col3 || '').padStart(w3);
+  return c1 + c2 + c3;
+}
+
+/** Rasterizza e invia un'immagine PNG via comando ESC/POS GS v 0 (monocromatico con dithering) */
+function printRasterImage(printer: any, base64Data: string, maxWidth = 384) {
+  if (!base64Data || typeof base64Data !== 'string') return;
+  try {
+    const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '').trim();
+    if (!cleanBase64) return;
+    const rawBuffer = Buffer.from(cleanBase64, 'base64');
+    const png = PNG.sync.read(rawBuffer);
+
+    let targetWidth = png.width;
+    let targetHeight = png.height;
+    if (targetWidth > maxWidth) {
+      const scale = maxWidth / targetWidth;
+      targetWidth = maxWidth;
+      targetHeight = Math.round(png.height * scale);
+    }
+    if (targetWidth <= 0 || targetHeight <= 0) return;
+
+    const bytesWidth = Math.ceil(targetWidth / 8);
+    const bitmap = Buffer.alloc(bytesWidth * targetHeight, 0);
+
+    for (let y = 0; y < targetHeight; y++) {
+      const srcY = Math.min(png.height - 1, Math.floor((y / targetHeight) * png.height));
+      for (let x = 0; x < targetWidth; x++) {
+        const srcX = Math.min(png.width - 1, Math.floor((x / targetWidth) * png.width));
+        const idx = (png.width * srcY + srcX) << 2;
+        const r = png.data[idx];
+        const g = png.data[idx + 1];
+        const b = png.data[idx + 2];
+        const a = png.data[idx + 3];
+
+        if (a < 128) continue; // Trasparente = bianco
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (lum < 160) {
+          bitmap[y * bytesWidth + (x >> 3)] |= (0x80 >> (x & 7));
+        }
+      }
+    }
+
+    const xL = bytesWidth & 0xff;
+    const xH = (bytesWidth >> 8) & 0xff;
+    const yL = targetHeight & 0xff;
+    const yH = (targetHeight >> 8) & 0xff;
+
+    // ESC a 1 (Centro) + GS v 0 (Stampa immagine raster)
+    const header = Buffer.from([
+      0x1b, 0x61, 0x01,
+      0x1d, 0x76, 0x30, 0x00,
+      xL, xH, yL, yH
+    ]);
+    const footer = Buffer.from([0x0a, 0x1b, 0x61, 0x00]);
+
+    if (printer.raw) {
+      printer.raw(header);
+      printer.raw(bitmap);
+      printer.raw(footer);
+    }
+  } catch (err: any) {
+    console.warn('[Raster Image] Impossibile stampare immagine PNG:', err?.message || err);
+  }
+}
+
 const DEFAULT_SETTINGS = {
-  headerName: 'SAGRA DEL BORGO',
+  headerName: 'CAVAGLIO SOTTO LE STELLE',
+  headerSubtitle: 'AREA FESTE · VIA ASILO\nCAVAGLIO D\'AGOGNA (NO)',
   headerAddress: '', headerVat: '', headerPhone: '',
   headerAlign: 'ct', headerSize: 'NORMAL',
+  headerLogoBase64: '', footerLogoBase64: '',
   bodyFont: 'a', showOriginalPrice: true, showChangeAndDiscount: true,
   dateFormat: 'FULL', prepItemSize: 'DOUBLE_HEIGHT', prepNoteSize: 'NORMAL',
   prepShowMetadata: true, prepVariantFormat: 'BRACKETS',
-  footerText: 'Grazie e Buon Appetito!', footerShowCount: true,
+  footerText: 'GRAZIE\nPER AVER SCELTO LA NOSTRA SAGRA!', footerShowCount: true,
+  comandaGreeting: 'Buona Sagra! ★',
+  comandaShowHeader: true,
+  comandaShowPrice: true,
+  printToDepartments: false,
 };
 
-// ─── Stampa scontrino principale ──────────────────────────────────────────────
+// ─── Stampa scontrino principale (Layout fedele alla foto di riferimento) ─────
 function printScontrino(printer: any, payload: any, settings: any) {
-  printer.align(settings.headerAlign).style('b');
-  applySize(printer, settings.headerSize);
-  printer.text(settings.headerName || 'RICEVUTA');
+  const lineDivider = '------------------------------------------------';
 
-  printer.size(1, 1).style('normal');
-  if (settings.headerAddress) printer.text(settings.headerAddress);
+  // 1. Logo grafico in testata (se configurato)
+  if (settings.headerLogoBase64) {
+    printRasterImage(printer, settings.headerLogoBase64, 384);
+  }
+
+  // 2. Testata testo
+  printer.align('ct');
+  if (!settings.headerLogoBase64 && settings.headerName) {
+    printer.style('b');
+    applySize(printer, settings.headerSize || 'DOUBLE_HEIGHT');
+    printer.text(settings.headerName);
+    printer.size(1, 1).style('normal');
+  }
+
+  // Sottotitolo / Località / Indirizzo
+  const subtitle = settings.headerSubtitle || settings.headerAddress || '';
+  if (subtitle) {
+    printer.style('normal').size(1, 1);
+    subtitle.split('\n').forEach((l: string) => {
+      const line = l.trim();
+      if (line) printer.text(line);
+    });
+  }
   if (settings.headerVat) printer.text(`P.IVA: ${settings.headerVat}`);
   if (settings.headerPhone) printer.text(`Tel: ${settings.headerPhone}`);
 
-  printer.text(' ').font(settings.bodyFont).align('lt').text(`ORDINE #${payload.orderNumber}`);
+  // Separatore
+  printer.text(lineDivider);
 
-  const dateStr =
-    settings.dateFormat === 'SHORT'
-      ? new Date(payload.createdAt).toLocaleTimeString('it-IT')
-      : new Date(payload.createdAt).toLocaleString('it-IT');
-  printer.text(dateStr).text('--------------------------------');
+  // 3. Metadati Ordine a 2 colonne pulite
+  const orderDate = new Date(payload.createdAt || Date.now());
+  const dateStr = orderDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = orderDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const orderNumStr = String(payload.orderNumber || 0).padStart(4, '0');
 
+  let tableOrCustomer = 'ASPORTO';
   if (payload.customerName && payload.customerName !== 'Asporto / Generico') {
-    printer.style('b').text(`Cliente: ${payload.customerName}`).style('normal');
+    const isTavolo = /^tavolo\s*\d+/i.test(payload.customerName.trim());
+    tableOrCustomer = isTavolo ? payload.customerName.toUpperCase() : `TAV. ${payload.customerName.toUpperCase()}`;
   }
+
+  printer.align('lt').font('a');
+  printer.text(formatTwoColumns(`DATA   ${dateStr}`, `ORA   ${timeStr}`, 48));
+  printer.text(formatTwoColumns(tableOrCustomer, `N. SCONTRINO   ${orderNumStr}`, 48));
+  printer.text(lineDivider);
+
+  // 4. Tabella articoli
+  printer.text(formatThreeColumns('Q.TÀ', 'DESCRIZIONE', 'PREZZO', 6, 8, 48));
 
   let totalQty = 0;
   payload.items.forEach((item: any) => {
     totalQty += item.quantity;
-    const varName = item.variantName
-      ? settings.prepVariantFormat === 'BRACKETS'
-        ? ` [${item.variantName}]`
-        : ` * ${item.variantName}`
-      : '';
-    const line = `${item.quantity}x ${item.product.name}${varName}`;
+    const isOmaggio = (item.priceAtTime === 0 && (!payload.discount || payload.discount === 0)) ||
+      (item.note && item.note.includes('OMAGGIO')) ||
+      (item.variantName && item.variantName.includes('OMAGGIO'));
 
-    if (settings.showChangeAndDiscount) {
-      const total = (item.priceAtTime * item.quantity).toFixed(2);
-      printer.text(`${line.substring(0, 24).padEnd(24)} ${total}`);
-    } else {
-      printer.text(line);
+    const priceNum = isOmaggio ? 0 : item.priceAtTime * item.quantity;
+    const priceFormatted = priceNum.toFixed(2).replace('.', ',');
+
+    let itemDesc = item.product?.name || 'Articolo';
+    if (isOmaggio) itemDesc += ' (OMAGGIO)';
+    if (item.variantName && !item.variantName.includes('OMAGGIO')) {
+      itemDesc += ` [${item.variantName}]`;
     }
 
-    if (item.product.isCombo && item.product.comboItems) {
+    printer.text(formatThreeColumns(String(item.quantity), itemDesc, priceFormatted, 6, 8, 48));
+
+    // Note aggiuntive (escludendo il tag interno OMAGGIO)
+    const cleanNote = (item.note || '').replace(/\[OMAGGIO\]/g, '').trim();
+    if (cleanNote) {
+      printer.text(`      * ${cleanNote}`);
+    }
+
+    // Dettaglio articoli Combo
+    if (item.product?.isCombo && item.product?.comboItems) {
       item.product.comboItems.forEach((cItem: any) => {
-        printer.size(1, 1).style('normal').text(`   - ${cItem.quantity * item.quantity}x ${cItem.component?.name || 'Prodotto'}`);
+        printer.text(`      - ${cItem.quantity * item.quantity}x ${cItem.component?.name || 'Componente'}`);
       });
     }
   });
 
-  printer.text('--------------------------------').align('ct').style('b');
+  printer.text(lineDivider);
 
-  if (settings.showChangeAndDiscount && payload.discount && payload.discount > 0) {
-    printer.size(1, 1).text(`Lordo: EUR ${(payload.totalAmount + payload.discount).toFixed(2)}`);
-    printer.text(`Sconto: EUR -${payload.discount.toFixed(2)}`);
+  // 5. Totale e Sconti
+  if (payload.discount && Number(payload.discount) > 0) {
+    const scontoFormatted = `-${Number(payload.discount).toFixed(2).replace('.', ',')}`;
+    printer.text(formatTwoColumns('SCONTO', scontoFormatted, 48));
   }
 
-  printer.size(1, 2).text(`TOTALE: EUR ${payload.totalAmount.toFixed(2)}`).size(1, 1).style('normal');
+  const totFormatted = Number(payload.totalAmount || 0).toFixed(2).replace('.', ',');
+  printer.size(1, 2).style('b');
+  printer.text(formatTwoColumns('TOTALE', totFormatted, 48));
+  printer.size(1, 1).style('normal');
 
-  if (settings.showChangeAndDiscount && payload.paymentType) {
-    printer.text(`Pagamento: ${payload.paymentType === 'CASH' ? 'CONTANTI' : 'CARTA'}`);
-  }
+  // Metodo di pagamento
+  const paymentMethod = payload.paymentType === 'CARD' ? 'CARTA' : 'CONTANTI';
+  printer.text(' ');
+  printer.text(`PAGAMENTO  ${paymentMethod}`);
 
+  // 6. Ringraziamento & Grafica Piè di Pagina
   printer.text(' ').align('ct');
   if (settings.footerText) {
-    settings.footerText.split('\n').forEach((l: string) => printer.text(l));
+    settings.footerText.split('\n').forEach((l: string) => {
+      const line = l.trim();
+      if (line) printer.text(line);
+    });
   }
-  if (settings.footerShowCount) {
-    printer.text(`Articoli totali: ${totalQty}`);
+
+  if (settings.footerLogoBase64) {
+    printer.text(' ');
+    printRasterImage(printer, settings.footerLogoBase64, 384);
   }
 
   printer.text(' ').text(' ').cut();
 }
 
-// ─── Stampa talloncini comanda ─────────────────────────────────────────────────
+// ─── Stampa talloncini comanda singoli per articolo ───────────────────────────
 function printComande(printer: any, payload: any, settings: any, categoryFilter?: string) {
   const prepList: any[] = [];
 
   payload.items.forEach((item: any) => {
-    const catName = item.product.category?.name || 'Generico';
+    const catName = item.product?.category?.name || 'Generico';
 
-    if (item.product.isCombo && item.product.comboItems) {
+    if (item.product?.isCombo && item.product?.comboItems) {
       item.product.comboItems.forEach((cItem: any) => {
         for (let i = 0; i < item.quantity * cItem.quantity; i++) {
           prepList.push({
@@ -487,70 +622,108 @@ function printComande(printer: any, payload: any, settings: any, categoryFilter?
             categoryName: cItem.component?.category?.name || catName,
             comboName: item.product.name,
             note: item.note,
+            priceAtTime: item.priceAtTime,
           });
         }
       });
     } else {
       for (let i = 0; i < item.quantity; i++) {
         prepList.push({
-          name: item.product.name,
+          name: item.product?.name || 'Articolo',
           variantName: item.variantName,
           categoryName: catName,
           comboName: null,
           note: item.note,
+          priceAtTime: item.priceAtTime,
         });
       }
     }
   });
 
-  // Filtra per categoria se richiesto
   const filtered = categoryFilter
     ? prepList.filter(p => p.categoryName.toLowerCase().includes(categoryFilter.toLowerCase()))
     : prepList;
 
-  if (filtered.length === 0) return; // niente da stampare
+  if (filtered.length === 0) return;
 
-  printer.font('a').align('ct');
+  const lineDivider = '------------------------------------------------';
+  const orderNumStr = String(payload.orderNumber || 0).padStart(4, '0');
+  const timeStr = new Date(payload.createdAt || Date.now()).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
   filtered.forEach((prep: any) => {
-    if (settings.prepShowMetadata) {
-      printer
-        .size(1, 1)
-        .text(`ORDINE #${payload.orderNumber} - ${new Date(payload.createdAt).toLocaleTimeString('it-IT')}`);
-      if (payload.customerName && payload.customerName !== 'Asporto / Generico') {
-        printer.text(payload.customerName);
+    // 1. Intestazione Talloncino
+    if (settings.comandaShowHeader !== false) {
+      if (settings.headerLogoBase64) {
+        printRasterImage(printer, settings.headerLogoBase64, 256);
+      } else if (settings.headerName) {
+        printer.align('ct').style('b').text(settings.headerName);
       }
-      printer.text('--------------------------------');
+
+      const subtitle = settings.headerSubtitle || settings.headerAddress || '';
+      if (subtitle) {
+        printer.align('ct').style('normal');
+        subtitle.split('\n').forEach((l: string) => {
+          const line = l.trim();
+          if (line) printer.text(line);
+        });
+      }
+      printer.text(lineDivider);
+    }
+
+    // 2. Articolo in risalto (grande e in grassetto con eventuale prezzo a lato)
+    printer.align('lt').font('a');
+
+    const isOmaggio = (prep.priceAtTime === 0 && (!payload.discount || payload.discount === 0)) ||
+      (prep.note && prep.note.includes('OMAGGIO')) ||
+      (prep.variantName && prep.variantName.includes('OMAGGIO'));
+
+    let rightCol = '';
+    if (isOmaggio) {
+      rightCol = 'OMAGGIO';
+    } else if (settings.comandaShowPrice !== false && typeof prep.priceAtTime === 'number' && prep.priceAtTime > 0) {
+      rightCol = prep.priceAtTime.toFixed(2).replace('.', ',');
+    }
+
+    printer.size(1, 2).style('b');
+    if (rightCol) {
+      printer.text(formatTwoColumns(prep.name.toUpperCase(), rightCol, 48));
+    } else {
+      printer.text(prep.name.toUpperCase());
+    }
+    printer.size(1, 1).style('normal');
+
+    // Varianti o note articolo
+    const cleanVariant = prep.variantName && !prep.variantName.includes('OMAGGIO') ? prep.variantName : '';
+    const cleanNote = (prep.note || '').replace(/\[OMAGGIO\]/g, '').trim();
+    if (cleanVariant || cleanNote) {
+      const detail = [cleanVariant, cleanNote].filter(Boolean).join(' - ');
+      printer.text(`  * ${detail}`);
     }
 
     if (prep.comboName) {
-      printer.size(1, 1).style('normal').text(`[ MENU: ${prep.comboName} ]`).text(' ');
+      printer.text(`  [Menu: ${prep.comboName}]`);
     }
 
-    printer.style('b');
-    applySize(printer, settings.prepItemSize);
-    printer.text(`1x ${prep.name}`);
+    // Metadati Ordine
+    printer.text(lineDivider);
+    let metaLeft = `ORD. #${orderNumStr}`;
+    if (payload.customerName && payload.customerName !== 'Asporto / Generico') {
+      metaLeft += ` - ${payload.customerName.toUpperCase()}`;
+    }
+    printer.text(formatTwoColumns(metaLeft, timeStr, 48));
+    printer.text(lineDivider);
 
-    if (prep.variantName) {
+    // 3. Augurio finale (es. Buona Sagra! ★)
+    if (settings.comandaGreeting) {
+      printer.align('ct').style('b');
+      settings.comandaGreeting.split('\n').forEach((l: string) => {
+        const line = l.trim();
+        if (line) printer.text(line);
+      });
       printer.style('normal');
-      applySize(printer, settings.prepNoteSize);
-      const v =
-        settings.prepVariantFormat === 'BRACKETS'
-          ? `[${prep.variantName}]`
-          : `* ${prep.variantName}`;
-      printer.text(v);
     }
 
-    if (prep.note) {
-      printer.size(1, 1).style('normal').text(`✏ ${prep.note}`);
-    }
-
-    printer
-      .size(1, 1)
-      .style('normal')
-      .text(' ')
-      .text(`[ ${prep.categoryName.toUpperCase()} ]`)
-      .text(' ')
-      .cut();
+    printer.text(' ').cut();
   });
 }
 
@@ -701,39 +874,46 @@ async function processJob(job: any) {
 
       await new Promise<void>((resolve) => {
         printOnAdapter(printerConfig, (printer) => {
-          const report = payload.reportData;
-          printer.font('b').align('ct').style('b').size(1, 2).text(
-            payload.type === 'REPORT_Z' ? '--- CHIUSURA DI CASSA Z ---' : '--- LETTURA X ---'
+          const report = payload.reportData || {};
+          printer.font('a').align('ct').style('b').size(1, 2).text(
+            payload.type === 'REPORT_Z' ? 'CHIUSURA DI CASSA Z' : 'LETTURA X (RESOCONTO)'
           );
-          printer.size(1, 1).style('normal').text('--------------------------------').align('lt');
-          printer.text(`Data/Ora: ${new Date().toLocaleString('it-IT')}`);
-          printer.text(`Apertura: ${new Date(report.openedAt).toLocaleString('it-IT')}`);
-          printer.text(`Ordini: ${report.orderCount}`);
-          printer.text('--------------------------------');
-          printer.style('b').text(`INCASSO LORDO: EUR ${report.totalGross.toFixed(2)}`).style('normal');
-          printer.text(`Sconti: EUR -${(report.totalDiscount || 0).toFixed(2)}`);
-
-          if (report.paymentBreakdown) {
-            printer.text(`  Contanti: EUR ${(report.paymentBreakdown.CASH || 0).toFixed(2)}`);
-            printer.text(`  Carta:    EUR ${(report.paymentBreakdown.CARD || 0).toFixed(2)}`);
+          printer.size(1, 1).style('normal').text('------------------------------------------------').align('lt');
+          printer.text(formatTwoColumns(`Data: ${new Date().toLocaleDateString('it-IT')}`, `Ora: ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`, 48));
+          if (report.openedAt) {
+            printer.text(`Apertura: ${new Date(report.openedAt).toLocaleString('it-IT')}`);
           }
-
-          printer.style('b').size(1, 2).text(`INCASSO NETTO: EUR ${report.totalNet.toFixed(2)}`).size(1, 1).style('normal');
-          printer.text('--------------------------------').align('ct').style('b').text('REPARTI').style('normal').align('lt');
-
-          Object.entries(report.categoryBreakdown).forEach(([cat, amount]: [string, any]) => {
-            printer.text(`${cat.substring(0, 20).padEnd(20)} ${amount.toFixed(2)}`);
-          });
-
-          printer.text('--------------------------------').align('ct').style('b').text('ARTICOLI').style('normal').align('lt');
-          Object.entries(report.productStats).forEach(([prod, stat]: [string, any]) => {
-            printer.text(`${(stat.qty + 'x ' + prod).substring(0, 24).padEnd(24)} ${stat.total.toFixed(2)}`);
-          });
-
+          printer.text(`Ordini totali: ${report.orderCount || 0}`);
+          printer.text('------------------------------------------------');
+          printer.style('b').text(formatTwoColumns('INCASSO LORDO', `EUR ${(report.totalGross || 0).toFixed(2)}`, 48)).style('normal');
+          if (report.totalDiscount && Number(report.totalDiscount) > 0) {
+            printer.text(formatTwoColumns('SCONTI TOTALI', `EUR -${Number(report.totalDiscount).toFixed(2)}`, 48));
+          }
+          if (report.paymentBreakdown) {
+            printer.text(formatTwoColumns('  Di cui Contanti:', `EUR ${(report.paymentBreakdown.CASH || 0).toFixed(2)}`, 48));
+            printer.text(formatTwoColumns('  Di cui Carta/POS:', `EUR ${(report.paymentBreakdown.CARD || 0).toFixed(2)}`, 48));
+          }
+          printer.text('------------------------------------------------');
+          printer.style('b').size(1, 2).text(formatTwoColumns('INCASSO NETTO', `EUR ${(report.totalNet || 0).toFixed(2)}`, 48)).size(1, 1).style('normal');
+          printer.text('------------------------------------------------');
+          if (report.categoryBreakdown && Object.keys(report.categoryBreakdown).length > 0) {
+            printer.align('ct').style('b').text('VENDITE PER REPARTO').style('normal').align('lt');
+            Object.entries(report.categoryBreakdown).forEach(([cat, amount]: [string, any]) => {
+              printer.text(formatTwoColumns(cat, `EUR ${Number(amount).toFixed(2)}`, 48));
+            });
+            printer.text('------------------------------------------------');
+          }
+          if (report.productStats && Object.keys(report.productStats).length > 0) {
+            printer.align('ct').style('b').text('ARTICOLI VENDUTI').style('normal').align('lt');
+            Object.entries(report.productStats).forEach(([prod, stat]: [string, any]) => {
+              printer.text(formatTwoColumns(`${stat.qty}x ${prod}`, `EUR ${Number(stat.total).toFixed(2)}`, 48));
+            });
+            printer.text('------------------------------------------------');
+          }
           if (payload.type === 'REPORT_Z') {
-            printer.text(' ').text(' ').align('ct').style('b').text('*** FINE CHIUSURA Z ***').style('normal').text(' ').cut();
+            printer.align('ct').style('b').text('*** FINE CHIUSURA Z ***').style('normal').text(' ').cut();
           } else {
-            printer.text('--------------------------------').align('ct').text('*** FINE LETTURA X ***').text('--------------------------------').text(' ').cut();
+            printer.align('ct').style('b').text('*** FINE LETTURA X ***').style('normal').text(' ').cut();
           }
         }, resolve);
       });

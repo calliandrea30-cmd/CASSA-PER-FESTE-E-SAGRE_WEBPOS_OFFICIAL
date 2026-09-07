@@ -223,7 +223,8 @@ export default function POS() {
   const pd = Number(percentDiscount) || 0;
   const percentDiscountAmount = (subtotalAfterFree * pd) / 100;
   const fd = Math.min(Number(fixedDiscount) || 0, subtotalAfterFree); // non può superare il subtotale
-  const finalTotal = Math.max(0, subtotalAfterFree - percentDiscountAmount - fd);
+  const orderLevelDiscount = percentDiscountAmount + fd;
+  const finalTotal = Math.max(0, subtotalAfterFree - orderLevelDiscount);
   const totalDiscounts = initialTotal - finalTotal;
   const cash = Number(cashReceived) || 0;
   const change = Math.max(0, cash - finalTotal);
@@ -326,12 +327,13 @@ export default function POS() {
           userId: validUserId,
           paymentType,
           customerName: customerName || "Asporto / Generico",
-          discount: totalDiscounts,
+          discount: orderLevelDiscount,
           items: cart.items.map(i => {
             const fullVariantName = i.variant?.name ?? '';
             const noteDelimiter = ' - ';
             const delimiterIdx = fullVariantName.indexOf(noteDelimiter);
             const isNoteOnly = i.variant?.id === 'note';
+            const isFree = freeItems.has(i.id);
 
             let variantId: string | undefined;
             let variantName: string | undefined;
@@ -351,13 +353,17 @@ export default function POS() {
               note = undefined;
             }
 
+            if (isFree) {
+              note = note ? `${note} [OMAGGIO]` : '[OMAGGIO]';
+            }
+
             return {
               productId: i.product.id,
               variantId,
               variantName,
               note,
               quantity: i.quantity,
-              price: freeItems.has(i.id) ? 0 : i.product.price + (i.variant?.priceDelta || 0),
+              price: isFree ? 0 : i.product.price + (i.variant?.priceDelta || 0),
             };
           }),
         }),
