@@ -1039,326 +1039,167 @@ export default function AdminDashboard() {
             </>
           )}
 
-          {/* ── TAB: IMPOSTAZIONI ── */}
+          {/* ── TAB: IMPOSTAZIONI SCONTRINO (PULITO ED ELEGANTE) ── */}
           {activeTab === "IMPOSTAZIONI" && (
             <div className="flex flex-col lg:flex-row gap-6">
+              {/* Pannello configurazione essenziale */}
               <div className="flex-1 bg-surface-container-lowest p-6 rounded-3xl shadow-sm border border-outline-variant flex flex-col gap-6">
-                <div className="flex justify-between items-center border-b border-outline-variant/30 pb-4">
+                <div>
+                  <h3 className="font-headline-lg text-[24px] font-black text-on-background mb-1">Configurazione Scontrino</h3>
+                  <p className="text-xs text-neutral">Formato unico, compatto, ordinato ed elegante. Allineamento centrato con font termico salva-carta.</p>
+                </div>
+
+                {/* Dati Principali */}
+                <div className="bg-surface-container-high p-5 rounded-2xl flex flex-col gap-4">
                   <div>
-                    <h3 className="font-headline-lg text-[24px] font-black text-on-background">Personalizzazione Scontrini & Comande</h3>
-                    <p className="text-xs text-neutral">Configura logo, grafiche, testi e opzioni di stampa per la stampante termica 80mm</p>
+                    <label className="text-xs font-bold text-neutral uppercase tracking-wider block mb-1">Nome Evento / Attività (Testata Scontrino)</label>
+                    <input
+                      type="text"
+                      placeholder="es. SAGRA DEL VINO"
+                      value={settings.headerName}
+                      onChange={e => setSettings(s => ({ ...s, headerName: e.target.value }))}
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-sm font-bold text-on-background focus:border-primary outline-none"
+                    />
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => applyPreset("ECO")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🌱 Eco</button>
-                    <button onClick={() => applyPreset("RESTO")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🍽️ Sagra / Ristorante</button>
-                    <button onClick={() => applyPreset("BAR")} className="text-[12px] font-bold bg-surface-container-highest px-3 py-1 rounded-md hover:brightness-95">🍺 Solo Bar</button>
+
+                  <div>
+                    <label className="text-xs font-bold text-neutral uppercase tracking-wider block mb-1">Messaggio di Ringraziamento (Piè di Pagina)</label>
+                    <input
+                      type="text"
+                      placeholder="es. Grazie e Arrivederci!"
+                      value={settings.footerText}
+                      onChange={e => setSettings(s => ({ ...s, footerText: e.target.value }))}
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-sm text-on-background focus:border-primary outline-none"
+                    />
                   </div>
                 </div>
 
-                {/* ── Sezione Immagini PNG ── */}
-                <div className="bg-surface-container-high p-5 rounded-2xl border border-primary/20">
-                  <h4 className="font-bold text-[16px] text-primary mb-2 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[20px]">image</span> Logo e Grafiche Personalizzate (Formato PNG)
-                  </h4>
-                  <p className="text-xs text-neutral mb-4">
-                    Carica le immagini in formato PNG (consigliate in bianco e nero o monocromatiche ad alto contrasto per la stampa termica).
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Logo Testata */}
-                    <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col items-center text-center">
-                      <span className="text-xs font-bold text-neutral uppercase tracking-wider mb-2">Logo Testata Scontrino (In Alto)</span>
-                      {settings.headerLogoBase64 ? (
-                        <div className="flex flex-col items-center gap-2 w-full">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={settings.headerLogoBase64} alt="Logo Testata" className="max-h-20 max-w-full object-contain p-2 bg-white rounded-lg border border-outline-variant" />
-                          <div className="flex gap-2 mt-1">
-                            <label className="text-xs bg-surface-container-highest px-3 py-1.5 rounded-lg font-bold cursor-pointer hover:bg-outline-variant transition-colors">
-                              Sostituisci
-                              <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'headerLogoBase64')} className="hidden" />
-                            </label>
-                            <button onClick={() => removeLogo('headerLogoBase64')} className="text-xs bg-error/10 text-error hover:bg-error hover:text-white px-3 py-1.5 rounded-lg font-bold transition-colors">
-                              Rimuovi
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <label className="w-full flex flex-col items-center justify-center p-5 border-2 border-dashed border-outline-variant hover:border-primary rounded-xl cursor-pointer transition-colors bg-background/50">
-                          <span className="material-symbols-outlined text-3xl text-neutral mb-1">upload_file</span>
-                          <span className="text-xs font-bold text-primary">Carica Logo Testata (PNG)</span>
-                          <span className="text-[10px] text-neutral mt-0.5">Larghezza ideale: 384-512px</span>
-                          <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'headerLogoBase64')} className="hidden" />
-                        </label>
-                      )}
-                    </div>
+                {/* Opzioni Comande Articoli */}
+                <div className="bg-surface-container-high p-5 rounded-2xl flex flex-col gap-3">
+                  <h4 className="text-xs font-bold text-neutral uppercase tracking-wider mb-1">Opzioni Stampa Comande</h4>
 
-                    {/* Grafica Piè di Pagina */}
-                    <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col items-center text-center">
-                      <span className="text-xs font-bold text-neutral uppercase tracking-wider mb-2">Grafica Piè di Pagina (In Basso)</span>
-                      {settings.footerLogoBase64 ? (
-                        <div className="flex flex-col items-center gap-2 w-full">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={settings.footerLogoBase64} alt="Grafica Footer" className="max-h-20 max-w-full object-contain p-2 bg-white rounded-lg border border-outline-variant" />
-                          <div className="flex gap-2 mt-1">
-                            <label className="text-xs bg-surface-container-highest px-3 py-1.5 rounded-lg font-bold cursor-pointer hover:bg-outline-variant transition-colors">
-                              Sostituisci
-                              <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'footerLogoBase64')} className="hidden" />
-                            </label>
-                            <button onClick={() => removeLogo('footerLogoBase64')} className="text-xs bg-error/10 text-error hover:bg-error hover:text-white px-3 py-1.5 rounded-lg font-bold transition-colors">
-                              Rimuovi
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <label className="w-full flex flex-col items-center justify-center p-5 border-2 border-dashed border-outline-variant hover:border-primary rounded-xl cursor-pointer transition-colors bg-background/50">
-                          <span className="material-symbols-outlined text-3xl text-neutral mb-1">wallpaper</span>
-                          <span className="text-xs font-bold text-primary">Carica Grafica Piè di Pagina (PNG)</span>
-                          <span className="text-[10px] text-neutral mt-0.5">Es. silhouette, skyline o sponsor</span>
-                          <input type="file" accept="image/png,image/*" onChange={e => handleLogoUpload(e, 'footerLogoBase64')} className="hidden" />
-                        </label>
-                      )}
+                  <label className="flex items-center justify-between p-3.5 bg-surface-container-lowest rounded-xl border border-outline-variant cursor-pointer hover:border-primary transition-colors">
+                    <div>
+                      <div className="font-bold text-sm text-on-background">Stampa talloncino per ciascun articolo</div>
+                      <div className="text-xs text-neutral">Emette un piccolo tagliando compatto per ogni articolo ordinato da consegnare al banco</div>
                     </div>
-                  </div>
-                </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.comandaShowHeader}
+                      onChange={e => setSettings(s => ({ ...s, comandaShowHeader: e.target.checked }))}
+                      className="w-5 h-5 accent-primary cursor-pointer"
+                    />
+                  </label>
 
-                {/* ── Sezione A: Testata Scontrino ── */}
-                <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">A) Testata e Indirizzo</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                  <label className="flex items-center justify-between p-3.5 bg-surface-container-lowest rounded-xl border border-outline-variant cursor-pointer hover:border-primary transition-colors">
                     <div>
-                      <label className="text-xs text-neutral block mb-1">Nome / Titolo Evento (se non usi logo PNG)</label>
-                      <input type="text" placeholder="es. CAVAGLIO SOTTO LE STELLE" value={settings.headerName} onChange={e => setSettings(s => ({ ...s, headerName: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold" />
+                      <div className="font-bold text-sm text-on-background">Invia copia comande ai reparti (Cucina / Bar)</div>
+                      <div className="text-xs text-neutral">Invia una copia supplementare alle stampanti dedicate di cucina o bar se configurate</div>
                     </div>
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">Sottotitolo / Indirizzo / Località (su 2 righe)</label>
-                      <textarea rows={2} placeholder="AREA FESTE · VIA ASILO&#10;CAVAGLIO D'AGOGNA (NO)" value={settings.headerSubtitle} onChange={e => setSettings(s => ({ ...s, headerSubtitle: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm leading-tight" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">P.IVA / Codice Fiscale (opzionale)</label>
-                      <input type="text" placeholder="P.IVA..." value={settings.headerVat} onChange={e => setSettings(s => ({ ...s, headerVat: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">Telefono / Recapito (opzionale)</label>
-                      <input type="text" placeholder="Tel..." value={settings.headerPhone} onChange={e => setSettings(s => ({ ...s, headerPhone: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Sezione B: Corpo Scontrino ── */}
-                <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">B) Corpo Scontrino e Opzioni</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">Dimensione Carattere (Font)</label>
-                      <select value={settings.bodyFont || 'b'} onChange={e => setSettings(s => ({ ...s, bodyFont: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold">
-                        <option value="b">Compatto / Piccolo (Font B - Salva Carta Consigliato)</option>
-                        <option value="a">Standard (Font A - 32 Colonne)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">Formato Data</label>
-                      <select value={settings.dateFormat} onChange={e => setSettings(s => ({ ...s, dateFormat: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm">
-                        <option value="FULL">Data e Ora complete (GG/MM/AAAA HH:MM)</option>
-                        <option value="SHORT">Solo Ora (HH:MM)</option>
-                      </select>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer md:col-span-2">
-                      <input type="checkbox" checked={settings.showChangeAndDiscount} onChange={e => setSettings(s => ({ ...s, showChangeAndDiscount: e.target.checked }))} className="accent-primary" /> Mostra colonna PREZZO e subtotali
-                    </label>
-                  </div>
-                </div>
-
-                {/* ── Sezione C: Talloncini Comanda ── */}
-                <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">C) Talloncini Comanda per Articolo (Salva-Carta)</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">Frase di Augurio Finale (opzionale)</label>
-                      <input type="text" placeholder="Es. Buona Sagra! ★ (lascia vuoto per non stampare)" value={settings.comandaGreeting || ''} onChange={e => setSettings(s => ({ ...s, comandaGreeting: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">Dimensione Nome Articolo</label>
-                      <select value={settings.prepItemSize} onChange={e => setSettings(s => ({ ...s, prepItemSize: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold">
-                        <option value="DOUBLE_HEIGHT">Doppia Altezza (Consigliato)</option>
-                        <option value="GIANT">Gigante</option>
-                        <option value="NORMAL">Normale</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.comandaShowHeader} onChange={e => setSettings(s => ({ ...s, comandaShowHeader: e.target.checked }))} className="accent-primary" /> Stampa intestazione in cima al talloncino</label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.comandaShowPrice} onChange={e => setSettings(s => ({ ...s, comandaShowPrice: e.target.checked }))} className="accent-primary" /> Stampa il prezzo a lato del nome articolo</label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer md:col-span-2"><input type="checkbox" checked={!!settings.comandaShowGreeting} onChange={e => setSettings(s => ({ ...s, comandaShowGreeting: e.target.checked }))} className="accent-primary" /> Stampa frase di augurio sul talloncino (deseleziona per risparmiare carta)</label>
-                  </div>
-                </div>
-
-                {/* ── Sezione D: Piè di Pagina Scontrino ── */}
-                <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">D) Ringraziamento e Piè di Pagina Scontrino</h4>
-                  <div className="flex flex-col gap-3">
-                    <div>
-                      <label className="text-xs text-neutral block mb-1">Messaggio di Ringraziamento</label>
-                      <textarea rows={2} value={settings.footerText} onChange={e => setSettings(s => ({ ...s, footerText: e.target.value }))} placeholder="GRAZIE&#10;PER AVER SCELTO LA NOSTRA SAGRA!" className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm h-16" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Sezione E: Stampa nei Distretti ── */}
-                <div className="bg-surface-container-high p-4 rounded-xl border-2 border-primary/20">
-                  <h4 className="font-bold text-[16px] text-primary mb-2 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[20px]">storefront</span> E) Stampa nei Distretti / Reparti (Cucina, Bar)
-                  </h4>
-                  <p className="text-xs text-neutral mb-3">
-                    Scegli se inviare le comande alle stampanti dei singoli reparti remoti oppure stampare tutto solo alla cassa.
-                  </p>
-                  <label className="flex items-start gap-3 text-sm cursor-pointer p-3 bg-surface-container-lowest rounded-xl border border-outline-variant hover:border-primary transition-colors">
                     <input
                       type="checkbox"
                       checked={settings.printToDepartments}
                       onChange={e => setSettings(s => ({ ...s, printToDepartments: e.target.checked }))}
-                      className="w-5 h-5 mt-0.5 accent-primary cursor-pointer"
+                      className="w-5 h-5 accent-primary cursor-pointer"
                     />
-                    <div>
-                      <div className="font-bold text-on-background">
-                        Invia copia comanda alle stampanti dei singoli distretti (Cucina, Bar)
-                      </div>
-                      <div className="text-xs text-neutral mt-1 leading-relaxed">
-                        {settings.printToDepartments ? (
-                          <span className="text-primary font-medium">
-                            ✓ <strong>ABILITATO</strong>: Ogni ordine stampa alla cassa e in più invia un secondo biglietto alle stampanti collegate nei singoli reparti (cucina/bar).
-                          </span>
-                        ) : (
-                          <span className="text-success font-medium">
-                            ✓ <strong>DISABILITATO (Consigliato)</strong>: Quando invii la stampa, la cassa emette il biglietto riepilogativo per il cliente e il biglietto per ciascun articolo. Nessun doppio biglietto inviato ai distretti.
-                          </span>
-                        )}
-                      </div>
-                    </div>
                   </label>
                 </div>
 
+                {/* Pulsanti Azione */}
                 <div className="pt-2 border-t border-outline-variant/30 flex justify-end gap-3">
-                  <button onClick={printTest} className="bg-tertiary text-on-tertiary px-6 py-3 rounded-xl font-bold shadow-sm hover:brightness-110">Stampa di Prova</button>
-                  <button onClick={saveSettings} className="bg-primary text-on-primary px-8 py-3 rounded-xl font-bold shadow-md hover:brightness-110">Salva Configurazione</button>
+                  <button
+                    onClick={printTest}
+                    className="bg-tertiary text-on-tertiary px-6 py-3 rounded-xl font-bold shadow-sm hover:brightness-110 flex items-center gap-2 transition-transform active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-lg">print</span>
+                    Stampa di Prova (ESC/POS)
+                  </button>
+                  <button
+                    onClick={saveSettings}
+                    className="bg-primary text-on-primary px-8 py-3 rounded-xl font-bold shadow-md hover:brightness-110 flex items-center gap-2 transition-transform active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-lg">save</span>
+                    Salva Configurazione
+                  </button>
                 </div>
               </div>
 
-              {/* ── Anteprima scontrino fedele al print-agent compatto ── */}
-              <div className="w-full lg:w-[350px] shrink-0 bg-surface-container-highest p-6 rounded-3xl shadow-inner border border-outline-variant flex flex-col">
-                <h4 className="font-bold text-sm text-neutral mb-3 uppercase tracking-widest text-center flex items-center justify-center gap-1">
-                  <span className="material-symbols-outlined text-[18px]">receipt</span> Anteprima Live Compatta
+              {/* Anteprima Live centrata, ordinata, piccola ed elegante */}
+              <div className="w-full lg:w-[360px] shrink-0 bg-surface-container-highest p-6 rounded-3xl shadow-inner border border-outline-variant flex flex-col items-center">
+                <h4 className="font-bold text-xs text-neutral mb-4 uppercase tracking-widest text-center flex items-center justify-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">receipt_long</span> Anteprima Scontrino
                 </h4>
 
-                <div className="space-y-4 overflow-y-auto max-h-[850px] pr-1">
-                  {/* Scontrino Cliente Compatto */}
-                  <div className="bg-white text-black p-4 rounded-xl font-mono text-[10.5px] shadow-md border border-neutral/20 leading-tight">
-                    {/* Header Evento */}
-                    {settings.headerLogoBase64 && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={settings.headerLogoBase64} alt="Logo" className="max-h-12 mx-auto my-1 object-contain" />
-                    )}
-                    <div className="text-center font-bold text-[12.5px] tracking-wide my-0.5">{settings.headerName || "SAGRA"}</div>
+                {/* Scontrino compatto ed elegante */}
+                <div className="w-full max-w-[280px] bg-white text-black p-5 rounded-2xl font-mono text-[11px] shadow-lg border border-neutral/20 leading-tight">
+                  <div className="text-center select-none text-neutral/40 text-[10px]">========================================</div>
+                  <div className="text-center font-bold text-[13px] tracking-wide my-1">
+                    {settings.headerName || "SAGRA DEL BORGO"}
+                  </div>
+                  <div className="text-center text-[10px] text-neutral/70">
+                    Data: 07/09/2026 - Ora: 18:35
+                  </div>
+                  <div className="text-center font-bold text-[11px] mt-0.5 mb-1">
+                    ORDINE #0042
+                  </div>
+                  <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
 
-                    {(settings.headerSubtitle || settings.headerAddress) && (
-                      <div className="text-center text-[9.5px] text-neutral/80">
-                        {(settings.headerSubtitle || settings.headerAddress).split('\n').map((l, idx) => <div key={idx}>{l}</div>)}
-                      </div>
-                    )}
-                    {settings.headerVat && <div className="text-center text-[9px] text-neutral/80">P.IVA: {settings.headerVat}</div>}
-                    {settings.headerPhone && <div className="text-center text-[9px] text-neutral/80">Tel: {settings.headerPhone}</div>}
-                    <div className="text-center text-neutral/40 select-none text-[10px] my-1">--------------------------------</div>
-
-                    {/* Intestazione Tabella */}
-                    <div className="flex justify-between text-[10px] font-bold text-neutral/70">
-                      <span>DESCRIZIONE</span>
-                      <span>PREZZO</span>
+                  {/* Righe articoli */}
+                  <div className="space-y-1 my-2 text-[10.5px]">
+                    <div className="flex justify-between items-baseline">
+                      <span>1x CAFFE ESPRESSO</span>
+                      <span className="font-bold">1,50</span>
                     </div>
-                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-
-                    {/* Righe Articoli */}
-                    <div className="space-y-0.5 text-[10px] my-1">
-                      <div className="flex justify-between items-baseline">
-                        <span>1x CAFFE ESPRESSO</span>
-                        <span>1,20</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span>1x CAPPUCCINO</span>
-                        <span>1,80</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span>2x PANINO SALAMINA</span>
-                        <span>10,00</span>
-                      </div>
+                    <div className="flex justify-between items-baseline">
+                      <span>2x PANINO SALAMINA</span>
+                      <span className="font-bold">10,00</span>
                     </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-
-                    {/* Totale */}
-                    <div className="flex justify-between items-baseline font-black text-[12.5px] my-1">
-                      <span>TOTALE</span>
-                      <span>E 13,00</span>
+                    <div className="text-[9.5px] text-neutral/70 pl-2 -mt-0.5">
+                      * Senza cipolla
                     </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-
-                    {/* Pagamento */}
-                    <div className="flex justify-between items-baseline text-[10px] my-1">
-                      <span>PAGAMENTO: CONTANTI</span>
-                      <span>E 13,00</span>
-                    </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-
-                    {/* Dati Ordine Compatti (Niente N.DOC, Cassa o Asporto) */}
-                    <div className="flex justify-between text-[9px] text-neutral/80 my-1 font-bold">
-                      <span>ORDINE #0042</span>
-                      <span>07/09/2026 15:20</span>
-                    </div>
-
-                    {/* Ringraziamento */}
-                    {settings.footerText && (
-                      <>
-                        <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-                        <div className="text-center font-bold text-[10px] my-1">
-                          {settings.footerText}
-                        </div>
-                      </>
-                    )}
                   </div>
 
-                  {/* Talloncino Comanda Salva-Carta */}
-                  <div className="bg-white text-black p-3 rounded-xl font-mono text-[10.5px] shadow-md border border-neutral/20 leading-tight">
-                    <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans">Talloncino Comanda Salva-Carta</div>
+                  <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
 
-                    {settings.comandaShowHeader && settings.headerName && (
-                      <>
-                        <div className="text-center font-bold text-[11px]">{settings.headerName}</div>
-                        <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-                      </>
-                    )}
-
-                    <div className="flex justify-between items-center text-[10px] font-bold text-neutral/80">
-                      <span>#0047  15:20</span>
-                      <span>TAV. 12</span>
-                    </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-
-                    <div className="flex justify-between items-center my-1 font-bold text-[11.5px]">
-                      <span>1x PANINO SALAMINA</span>
-                      {settings.comandaShowPrice && <span>E 5,00</span>}
-                    </div>
-                    <div className="text-[9px] text-neutral/80 pl-2 mb-1">* Ben cotto</div>
-
-                    {settings.comandaShowGreeting && settings.comandaGreeting && (
-                      <>
-                        <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-                        <div className="text-center font-bold text-[9.5px] my-1">
-                          {settings.comandaGreeting}
-                        </div>
-                      </>
-                    )}
+                  {/* Totale centrato */}
+                  <div className="text-center font-black text-[13px] my-1 tracking-wide">
+                    TOTALE: € 11,50
                   </div>
+                  <div className="text-center text-[10px] text-neutral/80 uppercase font-bold">
+                    PAGAMENTO: CONTANTI
+                  </div>
+
+                  <div className="text-center select-none text-neutral/40 text-[10px] mt-1">----------------------------------------</div>
+
+                  {/* Messaggio finale centrato */}
+                  <div className="text-center font-bold text-[10.5px] my-1 text-neutral/80">
+                    {settings.footerText || "Grazie e Arrivederci!"}
+                  </div>
+                  <div className="text-center select-none text-neutral/40 text-[10px]">========================================</div>
                 </div>
+
+                {settings.comandaShowHeader && (
+                  <div className="w-full max-w-[280px] bg-white text-black p-4 rounded-xl font-mono text-[10.5px] shadow-md border border-neutral/20 leading-tight mt-4">
+                    <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans font-bold">
+                      Talloncino Articolo
+                    </div>
+                    <div className="text-center select-none text-neutral/40 text-[10px]">========================================</div>
+                    <div className="text-center font-bold text-[12px] my-0.5">
+                      ORDINE #0042
+                    </div>
+                    <div className="text-center text-[10px] text-neutral/70">
+                      18:35
+                    </div>
+                    <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
+                    <div className="text-center font-bold text-[12px] my-1">
+                      1x PANINO SALAMINA
+                    </div>
+                    <div className="text-center text-[9.5px] text-neutral/70">
+                      * Senza cipolla
+                    </div>
+                    <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -153,11 +153,11 @@ function setupSocketHandlers() {
 const start = async () => {
   try {
     const port = parseInt(process.env.PORT || '3001', 10);
+    setupSocketHandlers();
     await server.listen({ port, host: '0.0.0.0' });
     server.log.info('Listen resolved!');
     io.attach(server.server);
     await autoSeed();
-    setupSocketHandlers();
     server.log.info(`[Boot] API server in ascolto su porta ${port}`);
   } catch (err) {
     server.log.error(err);

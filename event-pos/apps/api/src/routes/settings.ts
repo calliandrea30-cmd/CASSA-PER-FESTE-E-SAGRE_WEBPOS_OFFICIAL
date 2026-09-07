@@ -65,6 +65,7 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
+    fastify.io.to('print-agents').emit('print-job', printJob);
     fastify.io.emit('print-job', printJob);
     return { status: 'ok' };
   });

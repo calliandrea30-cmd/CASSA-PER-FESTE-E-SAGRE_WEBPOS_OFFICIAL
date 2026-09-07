@@ -10,8 +10,8 @@ if (-not $FilePath -or -not (Test-Path $FilePath)) {
     exit 1
 }
 
-# Se il nome della stampante non e fornito, cerca la predefinita o una stampante POS
-if (-not $PrinterName -or $PrinterName.Trim() -eq "") {
+# Se il nome della stampante non e fornito o e generico, cerca la predefinita o una stampante POS
+if (-not $PrinterName -or $PrinterName.Trim() -eq "" -or $PrinterName -match "Predefinita|Sistema|default") {
     $pDef = Get-CimInstance Win32_Printer | Where-Object Default | Select-Object -First 1
     if ($pDef) {
         $PrinterName = $pDef.Name

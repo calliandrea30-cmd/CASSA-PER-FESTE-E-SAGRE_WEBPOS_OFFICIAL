@@ -60,6 +60,7 @@ async function default_1(fastify) {
                 payload: JSON.stringify({ ...mockOrder, settings: data, printerConfigs }),
             },
         });
+        fastify.io.to('print-agents').emit('print-job', printJob);
         fastify.io.emit('print-job', printJob);
         return { status: 'ok' };
     });
