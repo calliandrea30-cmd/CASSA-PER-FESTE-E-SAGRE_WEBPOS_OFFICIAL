@@ -4,6 +4,8 @@ import path from 'path';
 import * as dotenv from 'dotenv';
 import net from 'net';
 import http from 'http';
+import { execSync } from 'child_process';
+import os from 'os';
 // @ts-ignore
 import escpos from 'escpos';
 import { getDeviceList } from 'usb';
@@ -191,30 +193,194 @@ class NetworkPrinterAdapter {
   }
 }
 
-// ─── Helper: apri una stampante dalla config ───────────────────────────────────
-function openPrinterDevice(pc: PrinterConfig): { device: any; isNetwork: boolean } {
-  if (pc.type === 'NETWORK') {
-    if (!pc.networkHost) throw new Error('networkHost non configurato');
-    const adapter = new NetworkPrinterAdapter(pc.networkHost, pc.networkPort || 9100);
-    return { device: adapter, isNetwork: true };
-  } else {
-    const vid = pc.usbVendorId;
-    const pid = pc.usbProductId;
-    if (!vid || !pid) throw new Error('usbVendorId/usbProductId non configurati');
-    const adapter = new CustomUSBAdapter(vid, pid);
-    return { device: adapter, isNetwork: false };
+// ─── Zero-Config: Rilevamento automatico stampante termica ────────────────────
+// Vendor ID noti di stampanti termiche ESC/POS da 80mm / 58mm
+const THERMAL_PRINTER_VENDORS = new Set([
+  0x1fc9, // NXP / Xprinter / Zhuhai
+  0x04b8, // Seiko Epson Corp.
+  0x0416, // Winbond Electronics / POS-58/80
+  0x0483, // STMicroelectronics / POS Thermal
+  0x20d1, // Netum
+  0x0519, // Star Micronics
+  0x1504, // Bixolon
+  0x0fe6, // ICS
+  0x1a86, // Winchiphead (CH340 USB-Serial Thermal)
+  0x0dd4, // Custom Engineering
+  0x2730, // Citizen Systems
+  0x6868, // Rongta
+  0x0525, // Netchip
+  0x0471, // Generic POS
+]);
+
+/** Cerca qualsiasi stampante termica USB collegata al computer senza richiedere configurazioni */
+function findAnyUSBPrinter(): { vid: number; pid: number; device: any } | null {
+  try {
+    const list = getDeviceList();
+    // 1. Cerca prima dispositivi con Vendor ID noto di stampante termica
+    for (const d of list) {
+      const vid = d.deviceDescriptor?.idVendor;
+      const pid = d.deviceDescriptor?.idProduct;
+      if (vid && THERMAL_PRINTER_VENDORS.has(vid)) {
+        return { vid, pid, device: d };
+      }
+    }
+    // 2. Cerca dispositivi con USB Class 7 (Standard Printer Class)
+    for (const d of list) {
+      if (d.deviceDescriptor?.bDeviceClass === 7) {
+        return { vid: d.deviceDescriptor.idVendor, pid: d.deviceDescriptor.idProduct, device: d };
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Auto-Detect USB] Errore scansione:', e.message);
+  }
+  return null;
+}
+
+/** Rileva la stampante predefinita di default del sistema operativo (macOS o Windows) */
+function getDefaultSystemPrinter(): string | null {
+  const isWin = process.platform === 'win32';
+  try {
+    if (isWin) {
+      const cmd = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object Default).Name"';
+      const out = execSync(cmd, { encoding: 'utf8', timeout: 3000 }).trim();
+      return out || null;
+    } else {
+      // macOS / Linux CUPS
+      const out = execSync('lpstat -d 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+      const match = out.match(/:\s*([^\r\n]+)/);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+      // Fallback: cerca stampante contenente POS, 80 o Thermal in lpstat -p
+      const pOut = execSync('lpstat -p 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+      const posMatch = pOut.match(/(?:printer|stampante)\s+([^\s]+(?:POS|80|Receipt|Thermal)[^\s]*)/i);
+      if (posMatch) {
+        return (posMatch[1] || '').trim();
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/** Adapter che invia byte ESC/POS RAW direttamente alla stampante predefinita di sistema */
+class SystemDefaultPrinterAdapter {
+  private buffer: Buffer[] = [];
+  private printerName: string | null;
+
+  constructor(printerName?: string) {
+    this.printerName = printerName || getDefaultSystemPrinter();
+  }
+
+  open(callback: (err?: any) => void) {
+    this.buffer = [];
+    if (!this.printerName) {
+      this.printerName = getDefaultSystemPrinter();
+    }
+    console.log(`[Default Printer] In ascolto su stampante predefinita di sistema: "${this.printerName || 'default'}"`);
+    callback(null);
+  }
+
+  write(data: Buffer, callback: (err?: any) => void) {
+    this.buffer.push(data);
+    if (callback) callback(null);
+    return this;
+  }
+
+  close(callback?: (err?: any) => void) {
+    const fullBuffer = Buffer.concat(this.buffer);
+    this.buffer = [];
+
+    if (fullBuffer.length === 0) {
+      if (callback) callback(null);
+      return this;
+    }
+
+    const isWin = process.platform === 'win32';
+    const tmpDir = os.tmpdir();
+    const tmpFile = path.join(tmpDir, `sagrapos_job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.raw`);
+
+    try {
+      fs.writeFileSync(tmpFile, fullBuffer);
+
+      if (isWin) {
+        const pName = this.printerName ? `"${this.printerName}"` : '(Get-CimInstance Win32_Printer | Where-Object Default).Name';
+        const psCmd = `powershell -NoProfile -Command "$p = ${pName}; [System.IO.File]::ReadAllBytes('${tmpFile}') | Out-Printer -Name $p"`;
+        execSync(psCmd, { timeout: 8000 });
+      } else {
+        const target = this.printerName || getDefaultSystemPrinter();
+        const lpCmd = target
+          ? `lpr -l -P "${target}" "${tmpFile}"`
+          : `lpr -l "${tmpFile}"`;
+        execSync(lpCmd, { timeout: 8000 });
+      }
+
+      console.log(`[Default Printer] ✅ Stampa inviata con successo (${fullBuffer.length} bytes alla stampante "${this.printerName}")`);
+      try { fs.unlinkSync(tmpFile); } catch {}
+      if (callback) callback(null);
+    } catch (err: any) {
+      console.error('[Default Printer] Errore invio alla stampante di sistema:', err.message);
+      try { fs.unlinkSync(tmpFile); } catch {}
+      if (callback) callback(err);
+    }
+    return this;
   }
 }
 
-// ─── Helper: sceglie la stampante giusta per il ruolo del job ─────────────────
-function getPrinterConfigForRole(role: string, remotePrinters: PrinterConfig[]): PrinterConfig | undefined {
-  // Prima: cerca nelle stampanti locali (config.json)
+// ─── Helper: apri una stampante (con Auto-Detect e Fallback automatico) ────────
+function openPrinterDevice(pc?: PrinterConfig): { device: any; isNetwork: boolean } {
+  // 1. Se specificata stampante di rete TCP
+  if (pc && pc.type === 'NETWORK' && pc.networkHost) {
+    const adapter = new NetworkPrinterAdapter(pc.networkHost, pc.networkPort || 9100);
+    return { device: adapter, isNetwork: true };
+  }
+
+  // 2. Se specificati Vendor ID e Product ID manuali
+  if (pc && pc.usbVendorId && pc.usbProductId) {
+    try {
+      const adapter = new CustomUSBAdapter(pc.usbVendorId, pc.usbProductId);
+      return { device: adapter, isNetwork: false };
+    } catch (e: any) {
+      console.warn(`[Printer] USB VID:0x${pc.usbVendorId.toString(16)} non aperto via USB diretta (${e.message}). Uso stampante predefinita.`);
+    }
+  }
+
+  // 3. ZERO-CONFIG: Cerca qualsiasi stampante termica USB collegata
+  const anyUsb = findAnyUSBPrinter();
+  if (anyUsb) {
+    try {
+      console.log(`[Auto-Detect] Trovata stampante termica USB: VID:0x${anyUsb.vid.toString(16)} PID:0x${anyUsb.pid.toString(16)}`);
+      const adapter = new CustomUSBAdapter(anyUsb.vid, anyUsb.pid);
+      return { device: adapter, isNetwork: false };
+    } catch (e: any) {
+      console.log(`[Auto-Detect] Porta USB diretta occupata dal driver (${e.message}). Passo alla stampante di sistema.`);
+    }
+  }
+
+  // 4. ZERO-CONFIG DEFAULT: Usa la stampante predefinita di sistema (es. Printer_POS_80)
+  const defaultName = getDefaultSystemPrinter();
+  console.log(`[Auto-Detect] Uso stampante di sistema predefinita di default: "${defaultName || 'Sistema'}" (80mm)`);
+  const sysAdapter = new SystemDefaultPrinterAdapter(defaultName || undefined);
+  return { device: sysAdapter, isNetwork: false };
+}
+
+// ─── Helper: sceglie la stampante giusta (con default zero-config) ─────────────
+function getPrinterConfigForRole(role: string, remotePrinters: PrinterConfig[]): PrinterConfig {
+  // 1. Cerca prima nella config locale (config.json)
   if (config.printers && config.printers.length > 0) {
     const local = config.printers.find(p => p.role === role);
     if (local) return local;
   }
-  // Poi: usa quelle dal DB (passate nel payload)
-  return remotePrinters?.find((p: PrinterConfig) => p.role === role);
+  // 2. Cerca nel database
+  const remote = remotePrinters?.find((p: PrinterConfig) => p.role === role);
+  if (remote) return remote;
+
+  // 3. ZERO-CONFIG DEFAULT: Ritorna la stampante termica predefinita di default (80mm)
+  const defName = getDefaultSystemPrinter() || 'Stampante Termica 80mm Predefinita';
+  return {
+    type: 'USB',
+    role: role,
+    name: defName,
+  };
 }
 
 // ─── Helpers stampa ───────────────────────────────────────────────────────────
@@ -637,7 +803,13 @@ async function processJob(job: any) {
         ];
 
         if (printers.length === 0) {
-          console.warn('[Job] Nessuna stampante reparto configurata — comande non stampate.');
+          // Zero-Config: se non ci sono stampanti dedicate per cucina o bar,
+          // stampa le comande sulla stampante termica predefinita di default!
+          const defaultPrinter = getPrinterConfigForRole('KITCHEN', remotePrinters);
+          console.log(`[Job] Stampo comande su stampante predefinita "${defaultPrinter.name}"`);
+          await new Promise<void>((resolve) => {
+            printOnAdapter(defaultPrinter, (printer) => printComande(printer, payload, settings), resolve);
+          });
         } else {
           for (const { config: pc, filter } of printers) {
             await new Promise<void>((resolve) => {
