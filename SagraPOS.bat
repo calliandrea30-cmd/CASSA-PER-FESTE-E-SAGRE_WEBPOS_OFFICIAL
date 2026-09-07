@@ -24,6 +24,12 @@ if exist "%SCRIPT_DIR%event-pos\package.json" (
 
 set "CONFIG_FILE=%PROJECT_ROOT%config.local.json"
 
+REM ----------------------------------------------------------------------------
+REM 0. Chiusura preventiva processi Node orfani per liberare blocchi file Windows
+REM ----------------------------------------------------------------------------
+taskkill /FI "WINDOWTITLE eq SagraPOS*" /T /F >nul 2>&1
+taskkill /F /IM node.exe >nul 2>&1
+
 echo ============================================================================
 echo                      SAGRA POS - AVVIO SISTEMA
 echo                   Sistema POS per Sagre ed Eventi
@@ -38,20 +44,27 @@ if errorlevel 1 goto :ERRORE_NODE
 for /f "tokens=*" %%v in ('node --version') do echo [OK] Node.js %%v rilevato.
 
 REM ----------------------------------------------------------------------------
-REM 2. Verifica dipendenze (node_modules)
+REM 2. Verifica e installazione dipendenze (node_modules)
 REM ----------------------------------------------------------------------------
-if not exist "%PROJECT_ROOT%node_modules\" (
+if not exist "%PROJECT_ROOT%node_modules\next\" (
     echo.
-    echo [INFO] Prima installazione: scarico le librerie necessarie...
-    echo (Questa operazione puo richiedere qualche minuto, attendi...)
+    echo ============================================================================
+    echo [INFO] Prima installazione: scarico e configuro le librerie necessarie...
+    echo (Questa operazione puo richiedere 2-3 minuti a seconda del computer)
+    echo.
+    echo NOTA: Eventuali avvisi 'npm warn' gialli o di pulizia sono del tutto NORMALI.
+    echo NON premere Ctrl+C e NON toccare la tastiera: attendi il messaggio di OK!
+    echo ============================================================================
+    echo.
     pushd "%PROJECT_ROOT%"
-    cmd /c npm install
+    cmd /c npm install --no-audit --no-fund
     if errorlevel 1 (
         popd
         goto :ERRORE_INSTALL
     )
     popd
-    echo [OK] Librerie installate con successo!
+    echo.
+    echo [OK] Tutte le librerie sono state installate con successo!
 )
 
 REM ----------------------------------------------------------------------------
@@ -358,10 +371,27 @@ exit /b 1
 :ERRORE_INSTALL
 echo.
 echo ============================================================================
-echo [ERRORE] Installazione delle librerie fallita.
-echo Verifica la connessione a Internet e riprova.
+echo [ATTENZIONE] L'installazione delle librerie non si e' completata.
+echo.
+echo Possibili cause:
+echo 1. I file erano bloccati da un processo Node rimasto attivo in background.
+echo 2. E' stato premuto accidentalmente Ctrl+C o interrotto il download.
+echo 3. L'antivirus o Windows Defender ha bloccato momentaneamente un file.
+echo.
+echo VUOI RIPULIRE E RIPROVARE IN AUTOMATICO?
+echo Digita R e premi Invio per pulire e riprovare subito, oppure premi solo Invio per uscire:
 echo ============================================================================
 echo.
+set "RETRY="
+set /p "RETRY=Scelta [R = Riprova, Invio = Esci]: "
+if /i "!RETRY!"=="R" (
+    echo.
+    echo [INFO] Chiusura processi e rimozione cartella parziale...
+    taskkill /F /IM node.exe >nul 2>&1
+    rd /s /q "%PROJECT_ROOT%node_modules" >nul 2>&1
+    cls
+    goto :MENU
+)
 pause
 exit /b 1
 
@@ -380,6 +410,7 @@ echo ===========================================================================
 echo Arresto dei servizi di SagraPOS in corso...
 echo ============================================================================
 taskkill /FI "WINDOWTITLE eq SagraPOS*" /T /F >nul 2>&1
+taskkill /F /IM node.exe >nul 2>&1
 echo [OK] Tutti i servizi sono stati arrestati.
 echo.
 echo Premi un tasto per chiudere questa finestra...
