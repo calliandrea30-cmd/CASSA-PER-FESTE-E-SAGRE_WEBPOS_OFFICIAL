@@ -1,4 +1,10 @@
 @echo off
+if not defined SAGRAPOS_PERSISTENT_SHELL (
+    set SAGRAPOS_PERSISTENT_SHELL=1
+    cmd /k "%~f0" %*
+    exit /b
+)
+
 setlocal EnableDelayedExpansion
 title SagraPOS - Console Principale
 chcp 65001 >nul 2>&1
@@ -16,6 +22,7 @@ if exist "%SCRIPT_DIR%event-pos\package.json" (
     echo.
     echo ============================================================================
     echo [ERRORE] Impossibile localizzare la cartella dei componenti di SagraPOS.
+    echo Assicurati di non aver spostato il file SagraPOS.bat fuori dalla cartella.
     echo ============================================================================
     echo.
     pause
@@ -51,10 +58,10 @@ if not exist "%PROJECT_ROOT%node_modules\next\" (
     echo.
     echo ============================================================================
     echo [INFO] Prima installazione: scarico e configuro le librerie necessarie...
-    echo (Questa operazione puo richiedere 2-3 minuti a seconda del computer)
+    echo (Questa operazione richiede 2-3 minuti a seconda del computer)
     echo.
-    echo NOTA: Eventuali avvisi 'npm warn' gialli o di pulizia sono del tutto NORMALI.
-    echo NON premere Ctrl+C e NON toccare la tastiera: attendi il messaggio di OK!
+    echo NOTA: Eventuali scritte di avviso gialle sono del tutto NORMALI.
+    echo NON premere tasti e NON chiudere la finestra: attendi il messaggio di OK!
     echo ============================================================================
     echo.
     pushd "%PROJECT_ROOT%"
@@ -225,7 +232,7 @@ REM Configurazione Print Agent locale
 REM Avvio API Server
 echo [INFO] Avvio API Server (porta 3001)...
 pushd "%PROJECT_ROOT%apps\api"
-start "SagraPOS API Server" /min cmd /k "title SagraPOS_API_Service && cd /d \"%PROJECT_ROOT%apps\api\" && set PORT=3001 && set HOST=0.0.0.0 && set NODE_ENV=production && node dist\index.js"
+start "SagraPOS API Server" /min cmd /k "title SagraPOS_API_Service && set PORT=3001 && set HOST=0.0.0.0 && set NODE_ENV=production && node dist\index.js"
 popd
 
 REM Attesa breve
@@ -234,13 +241,13 @@ ping -n 3 127.0.0.1 >nul 2>&1
 REM Avvio Web App
 echo [INFO] Avvio Interfaccia Web (porta 3000)...
 pushd "%PROJECT_ROOT%apps\web"
-start "SagraPOS Web" /min cmd /k "title SagraPOS_Web_Service && cd /d \"%PROJECT_ROOT%apps\web\" && npx next start -p 3000 -H 0.0.0.0"
+start "SagraPOS Web" /min cmd /k "title SagraPOS_Web_Service && npx next start -p 3000 -H 0.0.0.0"
 popd
 
 REM Avvio Print Agent
 echo [INFO] Avvio Print Agent stampante...
 pushd "%PROJECT_ROOT%apps\print-agent"
-start "SagraPOS Print Agent" /min cmd /k "title SagraPOS_Print_Service && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
+start "SagraPOS Print Agent" /min cmd /k "title SagraPOS_Print_Service && node dist\index.js"
 popd
 
 REM Attesa avvio completo
@@ -323,7 +330,7 @@ REM Configurazione Print Agent locale per cassa aggiuntiva
 
 echo [INFO] Avvio Print Agent per stampanti collegate a questa cassa...
 pushd "%PROJECT_ROOT%apps\print-agent"
-start "SagraPOS Print Agent" /min cmd /k "title SagraPOS_Print_Service && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
+start "SagraPOS Print Agent" /min cmd /k "title SagraPOS_Print_Service && node dist\index.js"
 popd
 
 echo.
