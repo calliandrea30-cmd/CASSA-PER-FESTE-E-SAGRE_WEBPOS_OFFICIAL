@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableDelayedExpansion
-title SagraPOS Launcher
+title SagraPOS - Console Principale
 chcp 65001 >nul 2>&1
 cls
 
@@ -25,10 +25,11 @@ if exist "%SCRIPT_DIR%event-pos\package.json" (
 set "CONFIG_FILE=%PROJECT_ROOT%config.local.json"
 
 REM ----------------------------------------------------------------------------
-REM 0. Chiusura preventiva processi Node orfani per liberare blocchi file Windows
+REM 0. Chiusura preventiva eventuali servizi SagraPOS rimasti aperti in precedenza
 REM ----------------------------------------------------------------------------
-taskkill /FI "WINDOWTITLE eq SagraPOS*" /T /F >nul 2>&1
-taskkill /F /IM node.exe >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SagraPOS_API_Service*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SagraPOS_Web_Service*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SagraPOS_Print_Service*" /T /F >nul 2>&1
 
 echo ============================================================================
 echo                      SAGRA POS - AVVIO SISTEMA
@@ -224,7 +225,7 @@ REM Configurazione Print Agent locale
 REM Avvio API Server
 echo [INFO] Avvio API Server (porta 3001)...
 pushd "%PROJECT_ROOT%apps\api"
-start "SagraPOS API Server" /min cmd /k "title SagraPOS API Server && cd /d \"%PROJECT_ROOT%apps\api\" && set PORT=3001 && set HOST=0.0.0.0 && set NODE_ENV=production && node dist\index.js"
+start "SagraPOS API Server" /min cmd /k "title SagraPOS_API_Service && cd /d \"%PROJECT_ROOT%apps\api\" && set PORT=3001 && set HOST=0.0.0.0 && set NODE_ENV=production && node dist\index.js"
 popd
 
 REM Attesa breve
@@ -233,13 +234,13 @@ ping -n 3 127.0.0.1 >nul 2>&1
 REM Avvio Web App
 echo [INFO] Avvio Interfaccia Web (porta 3000)...
 pushd "%PROJECT_ROOT%apps\web"
-start "SagraPOS Web" /min cmd /k "title SagraPOS Web && cd /d \"%PROJECT_ROOT%apps\web\" && npx next start -p 3000 -H 0.0.0.0"
+start "SagraPOS Web" /min cmd /k "title SagraPOS_Web_Service && cd /d \"%PROJECT_ROOT%apps\web\" && npx next start -p 3000 -H 0.0.0.0"
 popd
 
 REM Avvio Print Agent
 echo [INFO] Avvio Print Agent stampante...
 pushd "%PROJECT_ROOT%apps\print-agent"
-start "SagraPOS Print Agent" /min cmd /k "title SagraPOS Print Agent && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
+start "SagraPOS Print Agent" /min cmd /k "title SagraPOS_Print_Service && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
 popd
 
 REM Attesa avvio completo
@@ -322,7 +323,7 @@ REM Configurazione Print Agent locale per cassa aggiuntiva
 
 echo [INFO] Avvio Print Agent per stampanti collegate a questa cassa...
 pushd "%PROJECT_ROOT%apps\print-agent"
-start "SagraPOS Print Agent" /min cmd /k "title SagraPOS Print Agent && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
+start "SagraPOS Print Agent" /min cmd /k "title SagraPOS_Print_Service && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
 popd
 
 echo.
@@ -387,7 +388,9 @@ set /p "RETRY=Scelta [R = Riprova, Invio = Esci]: "
 if /i "!RETRY!"=="R" (
     echo.
     echo [INFO] Chiusura processi e rimozione cartella parziale...
-    taskkill /F /IM node.exe >nul 2>&1
+    taskkill /FI "WINDOWTITLE eq SagraPOS_API_Service*" /T /F >nul 2>&1
+    taskkill /FI "WINDOWTITLE eq SagraPOS_Web_Service*" /T /F >nul 2>&1
+    taskkill /FI "WINDOWTITLE eq SagraPOS_Print_Service*" /T /F >nul 2>&1
     rd /s /q "%PROJECT_ROOT%node_modules" >nul 2>&1
     cls
     goto :MENU
@@ -409,8 +412,9 @@ echo.
 echo ============================================================================
 echo Arresto dei servizi di SagraPOS in corso...
 echo ============================================================================
-taskkill /FI "WINDOWTITLE eq SagraPOS*" /T /F >nul 2>&1
-taskkill /F /IM node.exe >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SagraPOS_API_Service*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SagraPOS_Web_Service*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SagraPOS_Print_Service*" /T /F >nul 2>&1
 echo [OK] Tutti i servizi sono stati arrestati.
 echo.
 echo Premi un tasto per chiudere questa finestra...
