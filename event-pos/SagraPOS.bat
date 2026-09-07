@@ -52,89 +52,89 @@ if errorlevel 1 goto :ERRORE_NODE
 for /f "tokens=*" %%v in ('node --version') do echo [OK] Node.js %%v rilevato.
 
 REM ----------------------------------------------------------------------------
-REM 2. Verifica e installazione dipendenze (node_modules)
+REM 2. Verifica e installazione dipendenze
 REM ----------------------------------------------------------------------------
-if not exist "%PROJECT_ROOT%node_modules\next\" (
-    echo.
-    echo ============================================================================
-    echo [INFO] Prima installazione: scarico e configuro le librerie necessarie...
-    echo (Questa operazione richiede 2-3 minuti a seconda del computer)
-    echo.
-    echo NOTA: Eventuali scritte di avviso gialle sono del tutto NORMALI.
-    echo NON premere tasti e NON chiudere la finestra: attendi il messaggio di OK!
-    echo ============================================================================
-    echo.
-    pushd "%PROJECT_ROOT%"
-    cmd /c npm install --no-audit --no-fund
-    if errorlevel 1 (
-        popd
-        goto :ERRORE_INSTALL
-    )
+if exist "%PROJECT_ROOT%node_modules\next\" goto :SKIP_NPM_INSTALL
+echo.
+echo ============================================================================
+echo [INFO] Prima installazione: scarico e configuro le librerie necessarie...
+echo Questo processo richiede qualche minuto a seconda del computer.
+echo.
+echo NOTA: Eventuali scritte di avviso gialle sono del tutto NORMALI.
+echo NON premere tasti: attendi il messaggio di completamento!
+echo ============================================================================
+echo.
+pushd "%PROJECT_ROOT%"
+cmd /c npm install --no-audit --no-fund
+if errorlevel 1 (
     popd
-    echo.
-    echo [OK] Tutte le librerie sono state installate con successo!
+    goto :ERRORE_INSTALL
 )
+popd
+echo.
+echo [OK] Tutte le librerie sono state installate con successo!
+:SKIP_NPM_INSTALL
 
 REM ----------------------------------------------------------------------------
 REM 3. Generazione Database Client Prisma se mancante
 REM ----------------------------------------------------------------------------
-if not exist "%PROJECT_ROOT%node_modules\.prisma\client\" (
-    echo [INFO] Inizializzazione Database Client (Prisma)...
-    pushd "%PROJECT_ROOT%apps\api"
-    cmd /c npx prisma generate
-    popd
-    echo [OK] Database Client generato!
-)
+if exist "%PROJECT_ROOT%node_modules\.prisma\client\" goto :SKIP_PRISMA_GEN
+echo [INFO] Inizializzazione Database Client Prisma...
+pushd "%PROJECT_ROOT%apps\api"
+cmd /c npx prisma generate
+popd
+echo [OK] Database Client generato!
+:SKIP_PRISMA_GEN
 
 REM ----------------------------------------------------------------------------
 REM 4. Compilazione API Server se non presente
 REM ----------------------------------------------------------------------------
-if not exist "%PROJECT_ROOT%apps\api\dist\index.js" (
-    echo [INFO] Compilazione API Server...
-    pushd "%PROJECT_ROOT%apps\api"
-    cmd /c npx prisma generate
-    cmd /c npx tsc
-    if errorlevel 1 (
-        popd
-        goto :ERRORE_BUILD
-    )
+if exist "%PROJECT_ROOT%apps\api\dist\index.js" goto :SKIP_API_BUILD
+echo [INFO] Compilazione API Server...
+pushd "%PROJECT_ROOT%apps\api"
+cmd /c npx prisma generate
+cmd /c npx tsc
+if errorlevel 1 (
     popd
-    echo [OK] API Server compilato!
+    goto :ERRORE_BUILD
 )
+popd
+echo [OK] API Server compilato!
+:SKIP_API_BUILD
 
 REM ----------------------------------------------------------------------------
 REM 5. Compilazione Print Agent se non presente
 REM ----------------------------------------------------------------------------
-if not exist "%PROJECT_ROOT%apps\print-agent\dist\index.js" (
-    echo [INFO] Compilazione Print Agent...
-    pushd "%PROJECT_ROOT%apps\print-agent"
-    cmd /c npx tsc
-    if errorlevel 1 (
-        popd
-        goto :ERRORE_BUILD
-    )
+if exist "%PROJECT_ROOT%apps\print-agent\dist\index.js" goto :SKIP_PRINT_BUILD
+echo [INFO] Compilazione Print Agent...
+pushd "%PROJECT_ROOT%apps\print-agent"
+cmd /c npx tsc
+if errorlevel 1 (
     popd
-    echo [OK] Print Agent compilato!
+    goto :ERRORE_BUILD
 )
+popd
+echo [OK] Print Agent compilato!
+:SKIP_PRINT_BUILD
 
 REM ----------------------------------------------------------------------------
 REM 6. Compilazione Web App Next.js se non presente
 REM ----------------------------------------------------------------------------
-if not exist "%PROJECT_ROOT%apps\web\.next\" (
-    echo.
-    echo ============================================================================
-    echo [INFO] Prima compilazione interfaccia Web in corso...
-    echo (Questa operazione richiede circa 1 minuto solo la prima volta, attendi...)
-    echo ============================================================================
-    pushd "%PROJECT_ROOT%apps\web"
-    cmd /c npx next build
-    if errorlevel 1 (
-        popd
-        goto :ERRORE_BUILD
-    )
+if exist "%PROJECT_ROOT%apps\web\.next\" goto :SKIP_WEB_BUILD
+echo.
+echo ============================================================================
+echo [INFO] Prima compilazione interfaccia Web in corso...
+echo Questa operazione richiede circa 1 minuto solo la prima volta.
+echo ============================================================================
+pushd "%PROJECT_ROOT%apps\web"
+cmd /c npx next build
+if errorlevel 1 (
     popd
-    echo [OK] Interfaccia Web compilata con successo!
+    goto :ERRORE_BUILD
 )
+popd
+echo [OK] Interfaccia Web compilata con successo!
+:SKIP_WEB_BUILD
 
 REM ----------------------------------------------------------------------------
 REM 7. Controllo e pulizia vecchie configurazioni errate
@@ -230,7 +230,7 @@ REM Configurazione Print Agent locale
 ) > "%PROJECT_ROOT%apps\print-agent\config.json"
 
 REM Avvio API Server
-echo [INFO] Avvio API Server (porta 3001)...
+echo [INFO] Avvio API Server porta 3001...
 pushd "%PROJECT_ROOT%apps\api"
 start "SagraPOS API Server" /min cmd /k "title SagraPOS_API_Service && set PORT=3001 && set HOST=0.0.0.0 && set NODE_ENV=production && node dist\index.js"
 popd
@@ -239,7 +239,7 @@ REM Attesa breve
 ping -n 3 127.0.0.1 >nul 2>&1
 
 REM Avvio Web App
-echo [INFO] Avvio Interfaccia Web (porta 3000)...
+echo [INFO] Avvio Interfaccia Web porta 3000...
 pushd "%PROJECT_ROOT%apps\web"
 start "SagraPOS Web" /min cmd /k "title SagraPOS_Web_Service && npx next start -p 3000 -H 0.0.0.0"
 popd
