@@ -175,18 +175,24 @@ echo ===========================================================================
 echo.
 
 set "SCELTA="
-if defined CURRENT_MODE (
-    if "%CURRENT_MODE%"=="1" echo [INFO] Modalita attualmente salvata: [1] CASSA 1 (SERVER PRINCIPALE)
-    if "%CURRENT_MODE%"=="2" echo [INFO] Modalita attualmente salvata: [2] CASSA AGGIUNTIVA
-    echo Premi INVIO per confermare la modalita salvata, o digita 1, 2 o 3:
-    set /p "SCELTA=Scelta [default: %CURRENT_MODE%]: "
-    if "!SCELTA!"=="" set "SCELTA=%CURRENT_MODE%"
-) else (
-    set /p "SCELTA=Digita 1 per Server o 2 per Cassa Aggiuntiva [default: 1]: "
-    if "!SCELTA!"=="" set "SCELTA=1"
-)
-if "!SCELTA!"=="" set "SCELTA=1"
+if "%CURRENT_MODE%"=="1" goto :PROMPT_MODE_SAVED
+if "%CURRENT_MODE%"=="2" goto :PROMPT_MODE_SAVED
+goto :PROMPT_MODE_NEW
 
+:PROMPT_MODE_SAVED
+if "%CURRENT_MODE%"=="1" echo [INFO] Modalita attualmente salvata: [1] CASSA 1 (SERVER PRINCIPALE)
+if "%CURRENT_MODE%"=="2" echo [INFO] Modalita attualmente salvata: [2] CASSA AGGIUNTIVA
+echo Premi INVIO per confermare la modalita salvata, o digita 1, 2 o 3:
+set /p "SCELTA=Scelta [default: %CURRENT_MODE%]: "
+if "!SCELTA!"=="" set "SCELTA=%CURRENT_MODE%"
+goto :EVAL_SCELTA
+
+:PROMPT_MODE_NEW
+set /p "SCELTA=Digita 1 per Server o 2 per Cassa Aggiuntiva [default: 1]: "
+if "!SCELTA!"=="" set "SCELTA=1"
+goto :EVAL_SCELTA
+
+:EVAL_SCELTA
 if "%SCELTA%"=="1" goto :MODO_SERVER
 if "%SCELTA%"=="2" goto :MODO_CLIENT
 if "%SCELTA%"=="3" goto :RESET_CONFIG
@@ -309,16 +315,31 @@ if defined CLIENT_SERVER_IP (
     set "CLIENT_SERVER_IP=!CLIENT_SERVER_IP:"=!"
 )
 
-if "!CLIENT_SERVER_IP!"=="" (
-    echo Inserisci l'indirizzo IP del computer Cassa 1 ^(Server^):
-    echo ^(Lo trovi scritto nella schermata di Cassa 1, es: 192.168.1.100^)
-    set /p "CLIENT_SERVER_IP=Indirizzo IP Server: "
-) else (
-    echo Indirizzo IP Server memorizzato: !CLIENT_SERVER_IP!
-    echo Premi INVIO per confermare, o digita il nuovo IP del Server:
-    set /p "INPUT_IP=IP Server [default: !CLIENT_SERVER_IP!]: "
-    if not "!INPUT_IP!"=="" set "CLIENT_SERVER_IP=!INPUT_IP!"
-)
+if "!CLIENT_SERVER_IP!"=="" goto :CHIEDI_IP
+if "!CLIENT_SERVER_IP!"=="!SERVER_IP!" goto :CHIEDI_IP
+goto :CONFERMA_IP
+
+:CHIEDI_IP
+echo Inserisci l'indirizzo IP del computer Cassa 1 (Server):
+echo (Lo trovi scritto nella schermata di Cassa 1, es: 192.168.1.100)
+set /p "CLIENT_SERVER_IP=Indirizzo IP Server: "
+goto :PULISCI_IP
+
+:CONFERMA_IP
+echo Indirizzo IP Server memorizzato: !CLIENT_SERVER_IP!
+echo Premi INVIO per confermare, o digita il nuovo IP del Server:
+set /p "INPUT_IP=IP Server [default: !CLIENT_SERVER_IP!]: "
+if not "!INPUT_IP!"=="" set "CLIENT_SERVER_IP=!INPUT_IP!"
+goto :PULISCI_IP
+
+:PULISCI_IP
+REM Pulizia automatica dell'indirizzo IP inserito (rimuove http://, :3000, slash, spazi)
+set "CLIENT_SERVER_IP=!CLIENT_SERVER_IP:http://=!"
+set "CLIENT_SERVER_IP=!CLIENT_SERVER_IP:https://=!"
+set "CLIENT_SERVER_IP=!CLIENT_SERVER_IP:/=!"
+for /f "tokens=1 delims=:" %%p in ("!CLIENT_SERVER_IP!") do set "CLIENT_SERVER_IP=%%p"
+set "CLIENT_SERVER_IP=!CLIENT_SERVER_IP: =!"
+
 if "!CLIENT_SERVER_IP!"=="" set "CLIENT_SERVER_IP=127.0.0.1"
 
 REM Salvataggio configurazione client
