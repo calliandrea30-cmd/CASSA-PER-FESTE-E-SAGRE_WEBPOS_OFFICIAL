@@ -52,6 +52,7 @@ export default function AdminDashboard() {
     dateFormat: "FULL", prepItemSize: "DOUBLE_HEIGHT", prepNoteSize: "NORMAL",
     prepShowMetadata: true, prepVariantFormat: "BRACKETS",
     footerText: "", footerShowCount: true,
+    printToDepartments: false,
   });
 
   // ── Socket ─────────────────────────────────────────────────────────────────
@@ -1072,6 +1073,38 @@ export default function AdminDashboard() {
                     <textarea value={settings.footerText} onChange={e => setSettings(s => ({ ...s, footerText: e.target.value }))} placeholder="Grazie e Arrivederci!" className="flex-1 bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm h-16" />
                     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={settings.footerShowCount} onChange={e => setSettings(s => ({ ...s, footerShowCount: e.target.checked }))} /> Conteggio articoli</label>
                   </div>
+                </div>
+                <div className="bg-surface-container-high p-4 rounded-xl border-2 border-primary/20">
+                  <h4 className="font-bold text-[16px] text-primary mb-2 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[20px]">storefront</span> E) Stampa nei Distretti / Reparti (Cucina, Bar)
+                  </h4>
+                  <p className="text-xs text-neutral mb-3">
+                    Scegli se inviare le comande alle stampanti dei singoli reparti remoti oppure stampare tutto solo alla cassa.
+                  </p>
+                  <label className="flex items-start gap-3 text-sm cursor-pointer p-3 bg-surface-container-lowest rounded-xl border border-outline-variant hover:border-primary transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={settings.printToDepartments}
+                      onChange={e => setSettings(s => ({ ...s, printToDepartments: e.target.checked }))}
+                      className="w-5 h-5 mt-0.5 accent-primary cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-bold text-on-background">
+                        Invia copia comanda alle stampanti dei singoli distretti (Cucina, Bar)
+                      </div>
+                      <div className="text-xs text-neutral mt-1 leading-relaxed">
+                        {settings.printToDepartments ? (
+                          <span className="text-primary font-medium">
+                            ✓ <strong>ABILITATO</strong>: Ogni ordine stampa alla cassa e in più invia un secondo biglietto alle stampanti collegate nei singoli reparti (cucina/bar).
+                          </span>
+                        ) : (
+                          <span className="text-success font-medium">
+                            ✓ <strong>DISABILITATO (Consigliato)</strong>: Quando invii la stampa, la cassa emette il biglietto riepilogativo per il cliente e il biglietto per ciascun articolo. Nessun doppio biglietto inviato ai distretti.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </label>
                 </div>
                 <div className="pt-2 border-t border-outline-variant/30 flex justify-end gap-3">
                   <button onClick={printTest} className="bg-tertiary text-on-tertiary px-6 py-3 rounded-xl font-bold shadow-sm hover:brightness-110">Stampa di Prova</button>

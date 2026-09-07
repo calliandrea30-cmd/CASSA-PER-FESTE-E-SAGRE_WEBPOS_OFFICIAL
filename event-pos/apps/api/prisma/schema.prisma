@@ -175,6 +175,7 @@ model Setting {
   prepVariantFormat     String  @default("BRACKETS")
   footerText            String  @default("Grazie e Buon Appetito!")
   footerShowCount       Boolean @default(true)
+  printToDepartments   Boolean @default(false) // se true, invia copie comanda alle stampanti dei singoli distretti (Cucina, Bar)
 }
 
 model CashSession {

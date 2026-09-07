@@ -287,7 +287,7 @@ export default async function (fastify: FastifyInstance) {
         const payload = { ...order, settings, printerConfigs };
 
 
-        // Scontrino cliente → stampante CASHIER della cassa emittente
+        // Scontrino cliente e comande articoli → stampante della cassa emittente
         const cashierJob = await prisma.printJob.create({
           data: {
             orderId: order.id,
@@ -297,38 +297,31 @@ export default async function (fastify: FastifyInstance) {
           },
         });
 
-        // Talloncini comanda → tutte le stampanti di reparto
-        // Il print-agent filtrerà per il proprio stationId e ruolo
-        const kitchenJob = await prisma.printJob.create({
-          data: {
-            orderId: order.id,
-            stationId,
-            printerId: 'KITCHEN',
-            payload: JSON.stringify(payload),
-          },
-        });
-
         // ── Routing stampa scontrino (CASHIER) ────────────────────────────
-        // Tentiamo la stanza specifica della cassa: print-agent:{stationId}
-        // Se non è connessa, tentiamo la stanza generica 'print-agents'.
-        // NON facciamo broadcast globale (evita che le pagine web ricevano eventi di stampa).
         const cashierRoom = `print-agent:${stationId}`;
         const rooms = fastify.io.sockets.adapter.rooms;
         if (rooms.has(cashierRoom)) {
           fastify.io.to(cashierRoom).emit('print-job', cashierJob);
         } else if (rooms.has('print-agents')) {
-          // Fallback: primo agent disponibile nella stanza generica
           fastify.io.to('print-agents').emit('print-job', cashierJob);
         }
-        // Se nessun agent è connesso, il job rimane nel DB con status QUEUED
-        // e verrà consegnato alla prossima connessione (polling o reconnect).
 
-        // ── Routing comande cucina/bar (KITCHEN) ──────────────────────────
-        // In broadcast a tutti gli agent registrati: ognuno stampa i reparti suoi
-        if (rooms.has('print-agents')) {
-          fastify.io.to('print-agents').emit('print-job', kitchenJob);
+        // ── Stampa remota nei singoli distretti (Cucina, Bar, ecc.) ───────
+        // Inviata SOLO se abilitata nelle impostazioni di stampa!
+        if (settings?.printToDepartments) {
+          const kitchenJob = await prisma.printJob.create({
+            data: {
+              orderId: order.id,
+              stationId,
+              printerId: 'KITCHEN',
+              payload: JSON.stringify(payload),
+            },
+          });
+
+          if (rooms.has('print-agents')) {
+            fastify.io.to('print-agents').emit('print-job', kitchenJob);
+          }
         }
-        // Stessa logica: se nessun agent è connesso, il job è in DB (QUEUED).
       }
 
       return reply.code(201).send(order);

@@ -778,19 +778,18 @@ async function processJob(job: any) {
       const isKitchenJob = job.printerId !== 'CASHIER';
 
       if (isCashierJob) {
-        // Scontrino cliente sulla stampante CASHIER della nostra stazione
+        // ── ALLA CASSA: Stampa biglietto riepilogativo + biglietto per ciascun articolo ──
         const printerConfig = getPrinterConfigForRole('CASHIER', remotePrinters);
-        if (printerConfig) {
-          await new Promise<void>((resolve) => {
-            printOnAdapter(printerConfig, (printer) => printScontrino(printer, payload, settings), resolve);
-          });
-        } else {
-          console.warn('[Job] Nessuna stampante CASHIER configurata — scontrino non stampato.');
-        }
-      }
-
-      if (isKitchenJob || !isCashierJob) {
-        // Comande ai reparti: stampa su ogni stampante configurata per il reparto giusto
+        await new Promise<void>((resolve) => {
+          printOnAdapter(printerConfig, (printer) => {
+            // 1. Biglietto riepilogativo per il cliente (totale, sconti, articoli, pagamento)
+            printScontrino(printer, payload, settings);
+            // 2. Biglietto per ciascun articolo ordinato
+            printComande(printer, payload, settings);
+          }, resolve);
+        });
+      } else if (isKitchenJob) {
+        // ── DISTRETTI REMOTI: Stampa solo su stampanti dedicate di reparto (Cucina, Bar) ──
         const kitchenConfig = getPrinterConfigForRole('KITCHEN', remotePrinters);
         const barConfig = getPrinterConfigForRole('BAR', remotePrinters);
         const prepConfig = getPrinterConfigForRole('PREP', remotePrinters);
@@ -802,20 +801,10 @@ async function processJob(job: any) {
           ...(prepConfig ? [{ config: prepConfig, filter: '' }] : []),
         ];
 
-        if (printers.length === 0) {
-          // Zero-Config: se non ci sono stampanti dedicate per cucina o bar,
-          // stampa le comande sulla stampante termica predefinita di default!
-          const defaultPrinter = getPrinterConfigForRole('KITCHEN', remotePrinters);
-          console.log(`[Job] Stampo comande su stampante predefinita "${defaultPrinter.name}"`);
+        for (const { config: pc, filter } of printers) {
           await new Promise<void>((resolve) => {
-            printOnAdapter(defaultPrinter, (printer) => printComande(printer, payload, settings), resolve);
+            printOnAdapter(pc, (printer) => printComande(printer, payload, settings, filter || undefined), resolve);
           });
-        } else {
-          for (const { config: pc, filter } of printers) {
-            await new Promise<void>((resolve) => {
-              printOnAdapter(pc, (printer) => printComande(printer, payload, settings, filter || undefined), resolve);
-            });
-          }
         }
       }
 
