@@ -300,10 +300,19 @@ export default async function (fastify: FastifyInstance) {
         // ── Routing stampa scontrino (CASHIER) ────────────────────────────
         const cashierRoom = `print-agent:${stationId}`;
         const rooms = fastify.io.sockets.adapter.rooms;
+        let jobEmitted = false;
+
         if (rooms.has(cashierRoom)) {
           fastify.io.to(cashierRoom).emit('print-job', cashierJob);
-        } else if (rooms.has('print-agents')) {
+          jobEmitted = true;
+        }
+        if (rooms.has('print-agents')) {
           fastify.io.to('print-agents').emit('print-job', cashierJob);
+          jobEmitted = true;
+        }
+        // Fallback di sicurezza: invio broadcast a tutti i socket per garantire che nessuna stampa venga persa
+        if (!jobEmitted) {
+          fastify.io.emit('print-job', cashierJob);
         }
 
         // ── Stampa remota nei singoli distretti (Cucina, Bar, ecc.) ───────
@@ -320,6 +329,8 @@ export default async function (fastify: FastifyInstance) {
 
           if (rooms.has('print-agents')) {
             fastify.io.to('print-agents').emit('print-job', kitchenJob);
+          } else {
+            fastify.io.emit('print-job', kitchenJob);
           }
         }
       }

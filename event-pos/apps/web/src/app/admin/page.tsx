@@ -51,13 +51,14 @@ export default function AdminDashboard() {
     headerAddress: "", headerVat: "", headerPhone: "",
     headerAlign: "ct", headerSize: "NORMAL",
     headerLogoBase64: "", footerLogoBase64: "",
-    bodyFont: "a", showOriginalPrice: true, showChangeAndDiscount: true,
-    dateFormat: "FULL", prepItemSize: "DOUBLE_HEIGHT", prepNoteSize: "NORMAL",
+    bodyFont: "b", showOriginalPrice: true, showChangeAndDiscount: true,
+    dateFormat: "SHORT", prepItemSize: "NORMAL", prepNoteSize: "NORMAL",
     prepShowMetadata: true, prepVariantFormat: "BRACKETS",
-    footerText: "GRAZIE\nPER AVER SCELTO LA NOSTRA SAGRA!", footerShowCount: true,
-    comandaGreeting: "Buona Sagra! ★",
-    comandaShowHeader: true,
+    footerText: "GRAZIE E ARRIVEDERCI!", footerShowCount: true,
+    comandaGreeting: "",
+    comandaShowHeader: false,
     comandaShowPrice: true,
+    comandaShowGreeting: false,
     printToDepartments: false,
   });
 
@@ -1146,7 +1147,13 @@ export default function AdminDashboard() {
                 <div className="bg-surface-container-high p-4 rounded-xl">
                   <h4 className="font-bold text-[16px] text-primary mb-3">B) Corpo Scontrino e Opzioni</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.showChangeAndDiscount} onChange={e => setSettings(s => ({ ...s, showChangeAndDiscount: e.target.checked }))} className="accent-primary" /> Mostra colonna PREZZO e subtotali</label>
+                    <div>
+                      <label className="text-xs text-neutral block mb-1">Dimensione Carattere (Font)</label>
+                      <select value={settings.bodyFont || 'b'} onChange={e => setSettings(s => ({ ...s, bodyFont: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold">
+                        <option value="b">Compatto / Piccolo (Font B - Salva Carta Consigliato)</option>
+                        <option value="a">Standard (Font A - 32 Colonne)</option>
+                      </select>
+                    </div>
                     <div>
                       <label className="text-xs text-neutral block mb-1">Formato Data</label>
                       <select value={settings.dateFormat} onChange={e => setSettings(s => ({ ...s, dateFormat: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm">
@@ -1154,16 +1161,19 @@ export default function AdminDashboard() {
                         <option value="SHORT">Solo Ora (HH:MM)</option>
                       </select>
                     </div>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer md:col-span-2">
+                      <input type="checkbox" checked={settings.showChangeAndDiscount} onChange={e => setSettings(s => ({ ...s, showChangeAndDiscount: e.target.checked }))} className="accent-primary" /> Mostra colonna PREZZO e subtotali
+                    </label>
                   </div>
                 </div>
 
                 {/* ── Sezione C: Talloncini Comanda ── */}
                 <div className="bg-surface-container-high p-4 rounded-xl">
-                  <h4 className="font-bold text-[16px] text-primary mb-3">C) Talloncini Comanda per Articolo</h4>
+                  <h4 className="font-bold text-[16px] text-primary mb-3">C) Talloncini Comanda per Articolo (Salva-Carta)</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                     <div>
-                      <label className="text-xs text-neutral block mb-1">Frase di Augurio Finale (es. Buona Sagra! ★)</label>
-                      <input type="text" placeholder="Buona Sagra! ★" value={settings.comandaGreeting} onChange={e => setSettings(s => ({ ...s, comandaGreeting: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold" />
+                      <label className="text-xs text-neutral block mb-1">Frase di Augurio Finale (opzionale)</label>
+                      <input type="text" placeholder="Es. Buona Sagra! ★ (lascia vuoto per non stampare)" value={settings.comandaGreeting || ''} onChange={e => setSettings(s => ({ ...s, comandaGreeting: e.target.value }))} className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2 text-sm font-bold" />
                     </div>
                     <div>
                       <label className="text-xs text-neutral block mb-1">Dimensione Nome Articolo</label>
@@ -1175,8 +1185,9 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.comandaShowHeader} onChange={e => setSettings(s => ({ ...s, comandaShowHeader: e.target.checked }))} className="accent-primary" /> Stampa logo/intestazione in cima al talloncino</label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.comandaShowHeader} onChange={e => setSettings(s => ({ ...s, comandaShowHeader: e.target.checked }))} className="accent-primary" /> Stampa intestazione in cima al talloncino</label>
                     <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={settings.comandaShowPrice} onChange={e => setSettings(s => ({ ...s, comandaShowPrice: e.target.checked }))} className="accent-primary" /> Stampa il prezzo a lato del nome articolo</label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer md:col-span-2"><input type="checkbox" checked={!!settings.comandaShowGreeting} onChange={e => setSettings(s => ({ ...s, comandaShowGreeting: e.target.checked }))} className="accent-primary" /> Stampa frase di augurio sul talloncino (deseleziona per risparmiare carta)</label>
                   </div>
                 </div>
 
@@ -1231,38 +1242,30 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* ── Anteprima scontrino fedele alla foto ── */}
+              {/* ── Anteprima scontrino fedele al print-agent compatto ── */}
               <div className="w-full lg:w-[350px] shrink-0 bg-surface-container-highest p-6 rounded-3xl shadow-inner border border-outline-variant flex flex-col">
                 <h4 className="font-bold text-sm text-neutral mb-3 uppercase tracking-widest text-center flex items-center justify-center gap-1">
-                  <span className="material-symbols-outlined text-[18px]">receipt</span> Anteprima Live
+                  <span className="material-symbols-outlined text-[18px]">receipt</span> Anteprima Live Compatta
                 </h4>
 
                 <div className="space-y-4 overflow-y-auto max-h-[850px] pr-1">
-                  {/* Scontrino Cliente */}
-                  {/* Scontrino Cliente Fedele allo Script */}
-                  <div className="bg-white text-black p-4 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight">
-                    {/* Header Azienda con divisori ================================ */}
-                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
+                  {/* Scontrino Cliente Compatto */}
+                  <div className="bg-white text-black p-4 rounded-xl font-mono text-[10.5px] shadow-md border border-neutral/20 leading-tight">
+                    {/* Header Evento */}
                     {settings.headerLogoBase64 && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={settings.headerLogoBase64} alt="Logo" className="max-h-12 mx-auto my-1 object-contain" />
                     )}
-                    <div className="text-center font-bold text-[13px] tracking-wide my-0.5">{settings.headerName || "BAR NUVOLA S.R.L."}</div>
+                    <div className="text-center font-bold text-[12.5px] tracking-wide my-0.5">{settings.headerName || "SAGRA"}</div>
 
-                    <div className="text-center text-[10px] text-neutral/80">
-                      {settings.headerSubtitle || settings.headerAddress ? (
-                        (settings.headerSubtitle || settings.headerAddress).split('\n').map((l, idx) => <div key={idx}>{l}</div>)
-                      ) : (
-                        <div>Via Roma, 15 - Milano</div>
-                      )}
-                    </div>
-                    {settings.headerVat && <div className="text-center text-[9px] text-neutral/80">P.IVA / C.F.: {settings.headerVat}</div>}
+                    {(settings.headerSubtitle || settings.headerAddress) && (
+                      <div className="text-center text-[9.5px] text-neutral/80">
+                        {(settings.headerSubtitle || settings.headerAddress).split('\n').map((l, idx) => <div key={idx}>{l}</div>)}
+                      </div>
+                    )}
+                    {settings.headerVat && <div className="text-center text-[9px] text-neutral/80">P.IVA: {settings.headerVat}</div>}
                     {settings.headerPhone && <div className="text-center text-[9px] text-neutral/80">Tel: {settings.headerPhone}</div>}
-                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
-
-                    {/* Dicitura Documento Commerciale */}
-                    <div className="text-center text-[10px] font-bold mt-1">DOCUMENTO COMMERCIALE</div>
-                    <div className="text-center text-[9px] text-neutral/80 mb-2">di vendita o prestazione</div>
+                    <div className="text-center text-neutral/40 select-none text-[10px] my-1">--------------------------------</div>
 
                     {/* Intestazione Tabella */}
                     <div className="flex justify-between text-[10px] font-bold text-neutral/70">
@@ -1272,128 +1275,88 @@ export default function AdminDashboard() {
                     <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
                     {/* Righe Articoli */}
-                    <div className="space-y-0.5 text-[10.5px] my-1">
+                    <div className="space-y-0.5 text-[10px] my-1">
                       <div className="flex justify-between items-baseline">
-                        <span>1 CAFFE ESPRESSO</span>
+                        <span>1x CAFFE ESPRESSO</span>
                         <span>1,20</span>
                       </div>
                       <div className="flex justify-between items-baseline">
-                        <span>1 CAPPUCCINO</span>
+                        <span>1x CAPPUCCINO</span>
                         <span>1,80</span>
                       </div>
                       <div className="flex justify-between items-baseline">
-                        <span>2 BRIOCHE (E 1,50)</span>
-                        <span>3,00</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span>1 SPREMUTA D&apos;ARANCIA</span>
-                        <span>3,50</span>
-                      </div>
-                    </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-
-                    {/* Subtotale e Sconto */}
-                    <div className="space-y-0.5 text-[10.5px] my-1">
-                      <div className="flex justify-between items-baseline">
-                        <span>SUBTOTALE</span>
-                        <span>E 9,50</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span>SCONTO</span>
-                        <span>E 0,00</span>
+                        <span>2x PANINO SALAMINA</span>
+                        <span>10,00</span>
                       </div>
                     </div>
 
                     <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
                     {/* Totale */}
-                    <div className="flex justify-between items-baseline font-black text-[13px] my-1">
+                    <div className="flex justify-between items-baseline font-black text-[12.5px] my-1">
                       <span>TOTALE</span>
-                      <span>E 9,50</span>
+                      <span>E 13,00</span>
                     </div>
 
                     <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
                     {/* Pagamento */}
-                    <div className="text-[10px] mt-1">PAGAMENTO</div>
-                    <div className="flex justify-between items-baseline text-[10.5px]">
-                      <span>ELETTRONICO (POS)</span>
-                      <span>E 9,50</span>
-                    </div>
-                    <div className="flex justify-between items-baseline text-[10.5px]">
-                      <span>RESTO</span>
-                      <span>E 0,00</span>
+                    <div className="flex justify-between items-baseline text-[10px] my-1">
+                      <span>PAGAMENTO: CONTANTI</span>
+                      <span>E 13,00</span>
                     </div>
 
                     <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
-                    {/* Dati Fiscali / Ordine */}
-                    <div className="space-y-0.5 text-[9.5px] text-neutral/80 my-1">
-                      <div className="flex justify-between">
-                        <span>N. DOC.:</span>
-                        <span>0042-0112</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>DATA:</span>
-                        <span>07/09/2026</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>ORA:</span>
-                        <span>15:20</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>CASSA: 01</span>
-                        <span>OPER: 003</span>
-                      </div>
+                    {/* Dati Ordine Compatti (Niente N.DOC, Cassa o Asporto) */}
+                    <div className="flex justify-between text-[9px] text-neutral/80 my-1 font-bold">
+                      <span>ORDINE #0042</span>
+                      <span>07/09/2026 15:20</span>
                     </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
 
                     {/* Ringraziamento */}
-                    <div className="text-center font-bold text-[10.5px] my-1">
-                      {settings.footerText || "GRAZIE E ARRIVEDERCI!"}
-                    </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
+                    {settings.footerText && (
+                      <>
+                        <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
+                        <div className="text-center font-bold text-[10px] my-1">
+                          {settings.footerText}
+                        </div>
+                      </>
+                    )}
                   </div>
 
-                  {/* Talloncino Comanda Salva-Carta 32 colonne */}
-                  <div className="bg-white text-black p-4 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight">
-                    <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans">Talloncino Comanda (Salva-Carta)</div>
+                  {/* Talloncino Comanda Salva-Carta */}
+                  <div className="bg-white text-black p-3 rounded-xl font-mono text-[10.5px] shadow-md border border-neutral/20 leading-tight">
+                    <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans">Talloncino Comanda Salva-Carta</div>
 
-                    {settings.comandaShowHeader && (
+                    {settings.comandaShowHeader && settings.headerName && (
                       <>
-                        <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
-                        <div className="text-center font-bold text-[11px]">{settings.headerName || "BAR NUVOLA S.R.L."}</div>
-                        <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
+                        <div className="text-center font-bold text-[11px]">{settings.headerName}</div>
+                        <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
                       </>
                     )}
 
-                    {!settings.comandaShowHeader && (
-                      <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
-                    )}
-
                     <div className="flex justify-between items-center text-[10px] font-bold text-neutral/80">
-                      <span>ORD. #0047 15:20</span>
-                      <span>TAVOLO 12</span>
+                      <span>#0047  15:20</span>
+                      <span>TAV. 12</span>
                     </div>
 
                     <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
-                    <div className="flex justify-between items-center my-1.5 font-bold text-[12px]">
-                      <span>1x BIRRA PICCOLA</span>
-                      {settings.comandaShowPrice && <span>E 4,00</span>}
+                    <div className="flex justify-between items-center my-1 font-bold text-[11.5px]">
+                      <span>1x PANINO SALAMINA</span>
+                      {settings.comandaShowPrice && <span>E 5,00</span>}
                     </div>
-                    <div className="text-[9.5px] text-neutral/80 pl-2 mb-1">* ROSSA MEDIA</div>
+                    <div className="text-[9px] text-neutral/80 pl-2 mb-1">* Ben cotto</div>
 
-                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
-
-                    <div className="text-center font-bold text-[10.5px] my-1">
-                      {settings.comandaGreeting || "GRAZIE E BUONA SAGRA!"}
-                    </div>
-
-                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
+                    {settings.comandaShowGreeting && settings.comandaGreeting && (
+                      <>
+                        <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
+                        <div className="text-center font-bold text-[9.5px] my-1">
+                          {settings.comandaGreeting}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

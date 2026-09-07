@@ -120,14 +120,18 @@ function setupSocketHandlers() {
             socket.join(`event:${eventId}`);
             server.log.info(`[Socket] ${socket.id} joined event:${eventId}`);
         });
-        // Il print-agent si registra con la propria stationId
-        socket.on('print-agent-register', (data) => {
-            const room = `print-agent:${data.stationId}`;
-            socket.join(room);
+        // Il print-agent si registra con la propria stationId (supporta entrambi i nomi evento)
+        const handlePrintAgentRegister = (data) => {
+            const stationId = data?.stationId || '';
+            if (stationId) {
+                socket.join(`print-agent:${stationId}`);
+            }
             socket.join('print-agents'); // stanza globale per stampe broadcast
-            server.log.info(`[Socket] Print agent ${data.agentId} registrato per stazione ${data.stationId}`);
-            io.to(room).emit('print-agent-ack', { ok: true, stationId: data.stationId });
-        });
+            server.log.info(`[Socket] Print agent ${data?.agentId || socket.id} registrato per stazione "${stationId || 'broadcast'}"`);
+            socket.emit('print-agent-ack', { ok: true, stationId });
+        };
+        socket.on('print-agent-register', handlePrintAgentRegister);
+        socket.on('register-print-agent', handlePrintAgentRegister);
         socket.on('disconnect', (reason) => {
             server.log.info(`[Socket] Client disconnesso: ${socket.id} (${reason})`);
         });
