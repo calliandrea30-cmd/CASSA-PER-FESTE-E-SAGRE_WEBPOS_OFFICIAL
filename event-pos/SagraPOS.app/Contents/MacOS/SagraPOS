@@ -1,3 +1,8 @@
 #!/bin/bash
-DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
-osascript -e "tell application \"Terminal\" to do script \"cd \\\"$DIR\\\" && ./SagraPOS.command\" activate"
+BASE_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+if [ -f "$BASE_DIR/event-pos/SagraPOS.command" ]; then
+  DIR="$BASE_DIR/event-pos"
+else
+  DIR="$BASE_DIR"
+fi
+osascript -e "tell application \"Terminal\" to do script \"cd \\\"$DIR\\\" && bash ./SagraPOS.command\" activate"

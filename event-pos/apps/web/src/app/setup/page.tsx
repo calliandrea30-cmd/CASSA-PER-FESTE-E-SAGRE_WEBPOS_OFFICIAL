@@ -50,6 +50,14 @@ export default function SetupPage() {
         eventId 
       })
     );
+    // Sincronizza la stazione con il Print Agent locale (se attivo sulla macchina)
+    try {
+      fetch('http://127.0.0.1:3002/set-station', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stationId: station.id, stationName: station.name }),
+      }).catch(() => {});
+    } catch {}
     router.push('/');
   };
 

@@ -57,6 +57,18 @@ if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
   log_ok "Componenti installati con successo!"
 fi
 
+# Assicura presenza del file .env per il database SQLite
+if [ ! -f "$PROJECT_ROOT/apps/api/.env" ]; then
+  echo 'DATABASE_URL="file:./dev.db"' > "$PROJECT_ROOT/apps/api/.env"
+fi
+
+# Generazione Prisma Client se mancante per macOS
+if [ ! -f "$PROJECT_ROOT/node_modules/.prisma/client/libquery_engine-darwin.dylib.node" ]; then
+  log_step "Generazione Database Client Prisma per macOS..."
+  cd "$PROJECT_ROOT/apps/api" && npx prisma generate && cd "$PROJECT_ROOT"
+  log_ok "Database Client generato!"
+fi
+
 # ── 3. Compilazione automatica componenti se non compilati o aggiornati ────────
 if [ ! -d "$PROJECT_ROOT/apps/api/dist" ] || [ "$PROJECT_ROOT/apps/api/src/index.ts" -nt "$PROJECT_ROOT/apps/api/dist/index.js" ]; then
   log_step "Compilazione API Server..."
@@ -84,7 +96,7 @@ if [ -f "$CONFIG_FILE" ]; then
     CURRENT_MODE="1"
   elif grep -q '"isServer": false' "$CONFIG_FILE" 2>/dev/null; then
     CURRENT_MODE="2"
-    CURRENT_SERVER_IP=$(python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('serverIp',''))" 2>/dev/null || true)
+    CURRENT_SERVER_IP=$(node -e "try { const c = JSON.parse(require('fs').readFileSync('$CONFIG_FILE','utf8')); console.log(c.serverIp || ''); } catch(e){}" 2>/dev/null || true)
   fi
 fi
 
@@ -157,11 +169,16 @@ CONFIGEOF
   npx prisma generate 2>/dev/null || true
   cd "$PROJECT_ROOT"
 
-  # Configura Print Agent locale
+  # Configura Print Agent locale (preserva stationId se già impostata)
+  EXISTING_STATION=""
+  if [ -f "$PROJECT_ROOT/apps/print-agent/config.json" ]; then
+    EXISTING_STATION=$(node -e "try { const c = JSON.parse(require('fs').readFileSync('$PROJECT_ROOT/apps/print-agent/config.json','utf8')); console.log(c.STATION_ID || ''); } catch(e){}" 2>/dev/null || true)
+  fi
+
   cat > "$PROJECT_ROOT/apps/print-agent/config.json" << PAEOF
 {
   "SERVER_URL": "http://127.0.0.1:3001",
-  "STATION_ID": "",
+  "STATION_ID": "$EXISTING_STATION",
   "AGENT_ID": "agent-server-local",
   "printers": []
 }
@@ -272,11 +289,16 @@ APPLESCRIPT
 }
 CONFIGEOF
 
-  # Configura Print Agent per la cassa aggiuntiva
+  # Configura Print Agent per la cassa aggiuntiva (preserva stationId se già impostata)
+  EXISTING_STATION=""
+  if [ -f "$PROJECT_ROOT/apps/print-agent/config.json" ]; then
+    EXISTING_STATION=$(node -e "try { const c = JSON.parse(require('fs').readFileSync('$PROJECT_ROOT/apps/print-agent/config.json','utf8')); console.log(c.STATION_ID || ''); } catch(e){}" 2>/dev/null || true)
+  fi
+
   cat > "$PROJECT_ROOT/apps/print-agent/config.json" << PAEOF
 {
   "SERVER_URL": "http://$SERVER_IP:3001",
-  "STATION_ID": "",
+  "STATION_ID": "$EXISTING_STATION",
   "AGENT_ID": "agent-client-$(hostname)",
   "printers": []
 }

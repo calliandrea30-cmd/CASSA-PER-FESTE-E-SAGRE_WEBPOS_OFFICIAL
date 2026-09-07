@@ -57,10 +57,21 @@ let config = {
     AGENT_ID: process.env.AGENT_ID || `agent-${Date.now()}`,
     printers: [],
 };
-// Carica config.json dalla stessa directory dell'eseguibile
-try {
+function getConfigPath() {
     const isPkg = typeof process.pkg !== 'undefined';
-    const configPath = path_1.default.join(isPkg ? path_1.default.dirname(process.execPath) : process.cwd(), 'config.json');
+    if (isPkg)
+        return path_1.default.join(path_1.default.dirname(process.execPath), 'config.json');
+    const dirConfig = path_1.default.resolve(__dirname, '../config.json');
+    if (fs_1.default.existsSync(dirConfig))
+        return dirConfig;
+    const cwdConfig = path_1.default.resolve(process.cwd(), 'config.json');
+    if (fs_1.default.existsSync(cwdConfig))
+        return cwdConfig;
+    return dirConfig;
+}
+// Carica config.json
+try {
+    const configPath = getConfigPath();
     if (fs_1.default.existsSync(configPath)) {
         const fileConfig = JSON.parse(fs_1.default.readFileSync(configPath, 'utf8'));
         config = { ...config, ...fileConfig };
@@ -81,8 +92,21 @@ console.log(`[Boot] Print Agent (${config.AGENT_ID}) avviato. Server: ${config.S
 // Usa una variabile che verrà impostata dopo la dichiarazione del socket
 let socketRef = null;
 const healthServer = http_1.default.createServer((req, res) => {
+    // Gestione preflight CORS per consentire chiamate dal browser
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+        });
+        res.end();
+        return;
+    }
     if (req.url === '/health') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+        });
         res.end(JSON.stringify({
             status: 'ok',
             agentId: config.AGENT_ID,
@@ -91,8 +115,48 @@ const healthServer = http_1.default.createServer((req, res) => {
             connected: socketRef?.connected ?? false,
         }));
     }
+    else if (req.url === '/set-station' && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                if (data.stationId) {
+                    const prevStation = config.STATION_ID;
+                    config.STATION_ID = String(data.stationId).trim();
+                    console.log(`[Config] Stazione print-agent sincronizzata: "${config.STATION_ID}" (${data.stationName || ''})`);
+                    // Salva in config.json per persistere al prossimo riavvio
+                    try {
+                        const configPath = getConfigPath();
+                        fs_1.default.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+                    }
+                    catch (e) {
+                        console.warn('[Config] Impossibile salvare config.json:', e.message);
+                    }
+                    // Notifica il server socket della nuova stazione se connesso
+                    if (socketRef && socketRef.connected) {
+                        const regData = { stationId: config.STATION_ID, agentId: config.AGENT_ID };
+                        socketRef.emit('print-agent-register', regData);
+                        socketRef.emit('register-print-agent', regData);
+                    }
+                }
+                res.writeHead(200, {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                });
+                res.end(JSON.stringify({ ok: true, stationId: config.STATION_ID }));
+            }
+            catch (err) {
+                res.writeHead(400, {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                });
+                res.end(JSON.stringify({ error: err.message || 'Dati non validi' }));
+            }
+        });
+    }
     else {
-        res.writeHead(404);
+        res.writeHead(404, { 'Access-Control-Allow-Origin': '*' });
         res.end();
     }
 });

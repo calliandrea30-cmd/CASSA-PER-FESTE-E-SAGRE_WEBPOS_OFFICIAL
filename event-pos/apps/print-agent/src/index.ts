@@ -41,13 +41,19 @@ let config: Config = {
   printers: [],
 };
 
-// Carica config.json dalla stessa directory dell'eseguibile
-try {
+function getConfigPath(): string {
   const isPkg = typeof (process as any).pkg !== 'undefined';
-  const configPath = path.join(
-    isPkg ? path.dirname(process.execPath) : process.cwd(),
-    'config.json',
-  );
+  if (isPkg) return path.join(path.dirname(process.execPath), 'config.json');
+  const dirConfig = path.resolve(__dirname, '../config.json');
+  if (fs.existsSync(dirConfig)) return dirConfig;
+  const cwdConfig = path.resolve(process.cwd(), 'config.json');
+  if (fs.existsSync(cwdConfig)) return cwdConfig;
+  return dirConfig;
+}
+
+// Carica config.json
+try {
+  const configPath = getConfigPath();
   if (fs.existsSync(configPath)) {
     const fileConfig: Partial<Config> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     config = { ...config, ...fileConfig };
@@ -69,8 +75,22 @@ console.log(`[Boot] Print Agent (${config.AGENT_ID}) avviato. Server: ${config.S
 let socketRef: any = null;
 
 const healthServer = http.createServer((req: any, res: any) => {
+  // Gestione preflight CORS per consentire chiamate dal browser
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    res.end();
+    return;
+  }
+
   if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    });
     res.end(JSON.stringify({
       status: 'ok',
       agentId: config.AGENT_ID,
@@ -78,8 +98,47 @@ const healthServer = http.createServer((req: any, res: any) => {
       serverUrl: config.SERVER_URL,
       connected: socketRef?.connected ?? false,
     }));
+  } else if (req.url === '/set-station' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk: any) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        if (data.stationId) {
+          const prevStation = config.STATION_ID;
+          config.STATION_ID = String(data.stationId).trim();
+          console.log(`[Config] Stazione print-agent sincronizzata: "${config.STATION_ID}" (${data.stationName || ''})`);
+
+          // Salva in config.json per persistere al prossimo riavvio
+          try {
+            const configPath = getConfigPath();
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+          } catch (e: any) {
+            console.warn('[Config] Impossibile salvare config.json:', e.message);
+          }
+
+          // Notifica il server socket della nuova stazione se connesso
+          if (socketRef && socketRef.connected) {
+            const regData = { stationId: config.STATION_ID, agentId: config.AGENT_ID };
+            socketRef.emit('print-agent-register', regData);
+            socketRef.emit('register-print-agent', regData);
+          }
+        }
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(JSON.stringify({ ok: true, stationId: config.STATION_ID }));
+      } catch (err: any) {
+        res.writeHead(400, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        });
+        res.end(JSON.stringify({ error: err.message || 'Dati non validi' }));
+      }
+    });
   } else {
-    res.writeHead(404);
+    res.writeHead(404, { 'Access-Control-Allow-Origin': '*' });
     res.end();
   }
 });

@@ -38,6 +38,10 @@ taskkill /FI "WINDOWTITLE eq SagraPOS_API_Service*" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq SagraPOS_Web_Service*" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq SagraPOS_Print_Service*" /T /F >nul 2>&1
 
+REM Liberazione preventiva porte 3000 e 3001 su Windows
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000.*LISTENING" 2^>nul') do taskkill /f /pid %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3001.*LISTENING" 2^>nul') do taskkill /f /pid %%a >nul 2>&1
+
 echo ============================================================================
 echo                      SAGRA POS - AVVIO SISTEMA
 echo                   Sistema POS per Sagre ed Eventi
@@ -47,6 +51,12 @@ echo.
 REM ----------------------------------------------------------------------------
 REM 1. Verifica Node.js
 REM ----------------------------------------------------------------------------
+where node >nul 2>&1
+if errorlevel 1 (
+    if exist "%ProgramFiles%\nodejs\node.exe" set "PATH=%ProgramFiles%\nodejs;%PATH%"
+    if exist "%ProgramFiles(x86)%\nodejs\node.exe" set "PATH=%ProgramFiles(x86)%\nodejs;%PATH%"
+    if exist "%LOCALAPPDATA%\Programs\nodejs\node.exe" set "PATH=%LOCALAPPDATA%\Programs\nodejs;%PATH%"
+)
 where node >nul 2>&1
 if errorlevel 1 goto :ERRORE_NODE
 for /f "tokens=*" %%v in ('node --version') do echo [OK] Node.js %%v rilevato.
@@ -75,6 +85,11 @@ echo.
 echo [OK] Tutte le librerie sono state installate con successo!
 :SKIP_NPM_INSTALL
 
+REM Assicura presenza del file .env per SQLite
+if not exist "%PROJECT_ROOT%apps\api\.env" (
+    (echo DATABASE_URL="file:./dev.db") > "%PROJECT_ROOT%apps\api\.env"
+)
+
 REM ----------------------------------------------------------------------------
 REM 2b. Compilazione Tipi Condivisi se mancanti
 REM ----------------------------------------------------------------------------
@@ -87,10 +102,10 @@ echo [OK] Tipi condivisi compilati!
 :SKIP_TYPES_BUILD
 
 REM ----------------------------------------------------------------------------
-REM 3. Generazione Database Client Prisma se mancante
+REM 3. Generazione Database Client Prisma per Windows se mancante
 REM ----------------------------------------------------------------------------
-if exist "%PROJECT_ROOT%node_modules\.prisma\client\" goto :SKIP_PRISMA_GEN
-echo [INFO] Inizializzazione Database Client Prisma...
+if exist "%PROJECT_ROOT%node_modules\.prisma\client\query_engine-windows.dll.node" goto :SKIP_PRISMA_GEN
+echo [INFO] Inizializzazione Database Client Prisma per Windows...
 pushd "%PROJECT_ROOT%apps\api"
 cmd /c npx prisma generate
 popd
@@ -151,7 +166,7 @@ REM ----------------------------------------------------------------------------
 REM 7. Controllo e pulizia vecchie configurazioni errate
 REM ----------------------------------------------------------------------------
 if exist "%CONFIG_FILE%" (
-    findstr /C:"!SERVER_IP!" "%CONFIG_FILE%" >nul 2>&1
+    findstr /C:"^!SERVER_IP^!" "%CONFIG_FILE%" >nul 2>&1
     if not errorlevel 1 del /f /q "%CONFIG_FILE%" >nul 2>&1
 )
 
@@ -236,11 +251,22 @@ pushd "%PROJECT_ROOT%apps\api"
 cmd /c npx prisma db push --accept-data-loss
 popd
 
-REM Configurazione Print Agent locale
+REM Configurazione Print Agent locale (preserva stationId se già presente)
+set "EXISTING_STATION="
+if exist "%PROJECT_ROOT%apps\print-agent\config.json" (
+    for /f "tokens=2 delims=:," %%a in ('findstr /c:"STATION_ID" "%PROJECT_ROOT%apps\print-agent\config.json"') do (
+        set "EXISTING_STATION=%%~a"
+    )
+)
+if defined EXISTING_STATION (
+    set "EXISTING_STATION=!EXISTING_STATION: =!"
+    set "EXISTING_STATION=!EXISTING_STATION:"=!"
+)
+
 (
     echo {
     echo   "SERVER_URL": "http://127.0.0.1:3001",
-    echo   "STATION_ID": "",
+    echo   "STATION_ID": "!EXISTING_STATION!",
     echo   "AGENT_ID": "agent-server-local",
     echo   "printers": []
     echo }
@@ -283,6 +309,9 @@ echo   * Cassa mobile : http://!SERVER_IP!:3000
 echo.
 echo   ATTENZIONE: Sull'iPad NON scrivere 'localhost'!
 echo   Usa l'indirizzo con l'IP numerico: http://!SERVER_IP!:3000
+echo.
+echo   NOTA: Se Windows Defender Firewall mostra una notifica,
+echo   clicca su "Consenti accesso" (Rete privata) per permettere la connessione.
 echo.
 echo ============================================================================
 echo   NON CHIUDERE QUESTA FINESTRA! RIMANE APERTA DURANTE IL SERVIZIO.
@@ -350,11 +379,22 @@ REM Salvataggio configurazione client
     echo }
 ) > "%CONFIG_FILE%"
 
-REM Configurazione Print Agent locale per cassa aggiuntiva
+REM Configurazione Print Agent locale per cassa aggiuntiva (preserva stationId se già presente)
+set "EXISTING_STATION="
+if exist "%PROJECT_ROOT%apps\print-agent\config.json" (
+    for /f "tokens=2 delims=:," %%a in ('findstr /c:"STATION_ID" "%PROJECT_ROOT%apps\print-agent\config.json"') do (
+        set "EXISTING_STATION=%%~a"
+    )
+)
+if defined EXISTING_STATION (
+    set "EXISTING_STATION=!EXISTING_STATION: =!"
+    set "EXISTING_STATION=!EXISTING_STATION:"=!"
+)
+
 (
     echo {
     echo   "SERVER_URL": "http://!CLIENT_SERVER_IP!:3001",
-    echo   "STATION_ID": "",
+    echo   "STATION_ID": "!EXISTING_STATION!",
     echo   "AGENT_ID": "agent-client-%COMPUTERNAME%",
     echo   "printers": []
     echo }

@@ -124,19 +124,37 @@ export default function POS() {
           try { return JSON.parse(localStorage.getItem('pos_station') || 'null'); } catch { return null; }
         })();
 
+        let resolvedStationId = '';
+        let resolvedStationName = '';
+
         if (savedStation?.stationId && stationsData.find((s: any) => s.id === savedStation.stationId)) {
-          setStationId(savedStation.stationId);
-          setStationName(savedStation.stationName || 'Cassa');
+          resolvedStationId = savedStation.stationId;
+          resolvedStationName = savedStation.stationName || 'Cassa';
+          setStationId(resolvedStationId);
+          setStationName(resolvedStationName);
         } else if (stationsData.length === 1) {
           // Solo una stazione: usa quella automaticamente e salvala
-          setStationId(stationsData[0].id);
-          setStationName(stationsData[0].name || 'Cassa 1');
-          localStorage.setItem('pos_station', JSON.stringify({ stationId: stationsData[0].id, stationName: stationsData[0].name, eventId: evId }));
+          resolvedStationId = stationsData[0].id;
+          resolvedStationName = stationsData[0].name || 'Cassa 1';
+          setStationId(resolvedStationId);
+          setStationName(resolvedStationName);
+          localStorage.setItem('pos_station', JSON.stringify({ stationId: resolvedStationId, stationName: resolvedStationName, eventId: evId }));
         } else {
           // Più stazioni e nessuna salvata: reindirizza a /setup
           localStorage.removeItem('pos_station');
           window.location.href = '/setup';
           return;
+        }
+
+        // Sincronizza la stazione con il Print Agent locale (porta 3002)
+        if (resolvedStationId) {
+          try {
+            fetch('http://127.0.0.1:3002/set-station', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ stationId: resolvedStationId, stationName: resolvedStationName }),
+            }).catch(() => {});
+          } catch {}
         }
 
         setCategories(catsData || []);
