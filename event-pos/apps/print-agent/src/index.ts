@@ -800,34 +800,37 @@ function printComande(printer: any, payload: any, settings: any, categoryFilter?
   }
 
   filtered.forEach((prep: any) => {
-    // Inizializzazione ESC/POS: 1x Font B compatto
-    printer.pureText('\x1B\x40\x1B\x21\x00\x1B\x4D\x01');
+    // Inizializzazione ESC/POS: Font A (standard 12x24, leggermente più grande e nitido di Font B)
+    printer.pureText('\x1B\x40\x1B\x21\x00\x1B\x4D\x00');
     printer.style('normal').align('ct');
 
     printer.text(LINE_EQ_32);
-    printer.style('b').text(`ORDINE #${orderNumStr}`).style('normal');
+
+    // Numero ordine leggermente ingrandito (Double-Height) e in grassetto per massima visibilità
+    printer.size(0, 1).style('b').text(`ORDINE #${orderNumStr}`).size(0, 0).style('normal');
+
     printer.text(timeStr);
     if (tableLabel) {
-      printer.text(tableLabel);
+      printer.style('b').text(tableLabel).style('normal');
     }
     printer.text(LINE_DASH_32);
 
-    // Articolo in risalto (singola riga compatto in grassetto)
-    printer.style('b').text(`1x ${cleanReceiptText(prep.name).toUpperCase()}`).style('normal');
+    // Articolo in risalto (Double-Height in grassetto, ben visibile ma senza andare a capo inutilmente)
+    printer.size(0, 1).style('b').text(`1x ${cleanReceiptText(prep.name).toUpperCase()}`).size(0, 0).style('normal');
 
-    // Varianti o note
+    // Varianti o note (in Font A standard in grassetto, nitide)
     const cleanVariant = prep.variantName && !prep.variantName.includes('OMAGGIO') ? cleanReceiptText(prep.variantName) : '';
     const cleanNote = cleanReceiptText((prep.note || '').replace(/\[OMAGGIO\]/g, ''));
     if (cleanVariant || cleanNote) {
       const detail = [cleanVariant, cleanNote].filter(Boolean).join(' - ');
-      printer.text(`* ${detail}`);
+      printer.style('b').text(`* ${detail}`).style('normal');
     }
     if (prep.comboName) {
       printer.text(`[Menu: ${cleanReceiptText(prep.comboName)}]`);
     }
 
     if (settings.comandaShowPrice !== false && typeof prep.priceAtTime === 'number' && prep.priceAtTime > 0) {
-      printer.text(`E ${prep.priceAtTime.toFixed(2).replace('.', ',')}`);
+      printer.style('b').text(`E ${prep.priceAtTime.toFixed(2).replace('.', ',')}`).style('normal');
     }
 
     printer.text(LINE_DASH_32);

@@ -1208,30 +1208,30 @@ export default function AdminDashboard() {
                 </div>
 
                 {settings.comandaShowHeader && (
-                  <div className="w-full max-w-[280px] bg-white text-black p-4 rounded-xl font-mono text-[10.5px] shadow-md border border-neutral/20 leading-tight mt-4">
+                  <div className="w-full max-w-[280px] bg-white text-black p-4 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight mt-4">
                     <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans font-bold">
                       Talloncino Comanda (Salva-Carta)
                     </div>
                     <div className="text-center select-none text-neutral/40 text-[10px]">================================</div>
-                    <div className="text-center font-bold text-[12px] my-0.5">
+                    <div className="text-center font-bold text-[14px] my-0.5 tracking-wide">
                       ORDINE #0042
                     </div>
-                    <div className="text-center text-[10px] text-neutral/70">
+                    <div className="text-center text-[10.5px] text-neutral/70">
                       18:35
                     </div>
                     <div className="text-center select-none text-neutral/40 text-[10px]">--------------------------------</div>
-                    <div className="text-center font-bold text-[12px] my-1">
+                    <div className="text-center font-bold text-[13.5px] my-1 tracking-wide">
                       1x PANINO SALAMINA
                     </div>
-                    <div className="text-center text-[9.5px] text-neutral/70">
+                    <div className="text-center text-[10.5px] font-semibold text-neutral/80">
                       * Senza cipolla
                     </div>
                     {settings.comandaShowPrice && (
-                      <div className="text-center text-[10.5px] font-bold mt-0.5">
+                      <div className="text-center text-[11px] font-bold mt-1">
                         E 5,00
                       </div>
                     )}
-                    <div className="text-center select-none text-neutral/40 text-[10px]">--------------------------------</div>
+                    <div className="text-center select-none text-neutral/40 text-[10px] mt-1">--------------------------------</div>
                   </div>
                 )}
               </div>
