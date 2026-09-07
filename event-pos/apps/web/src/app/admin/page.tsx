@@ -1239,140 +1239,161 @@ export default function AdminDashboard() {
 
                 <div className="space-y-4 overflow-y-auto max-h-[850px] pr-1">
                   {/* Scontrino Cliente */}
-                  <div className="bg-white text-black p-5 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight">
-                    {/* Header con Logo o Nome */}
-                    {settings.headerLogoBase64 ? (
+                  {/* Scontrino Cliente Fedele allo Script */}
+                  <div className="bg-white text-black p-4 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight">
+                    {/* Header Azienda con divisori ================================ */}
+                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
+                    {settings.headerLogoBase64 && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={settings.headerLogoBase64} alt="Logo" className="max-h-16 mx-auto mb-2 object-contain" />
-                    ) : (
-                      <div className="text-center font-black text-[14px] text-blue-900 tracking-wide mb-1">{settings.headerName || "CAVAGLIO SOTTO LE STELLE"}</div>
+                      <img src={settings.headerLogoBase64} alt="Logo" className="max-h-12 mx-auto my-1 object-contain" />
                     )}
+                    <div className="text-center font-bold text-[13px] tracking-wide my-0.5">{settings.headerName || "BAR NUVOLA S.R.L."}</div>
 
-                    {/* Sottotitolo / Località */}
-                    <div className="text-center text-[10px] text-neutral/80 uppercase font-sans mb-3 leading-snug">
-                      {settings.headerSubtitle ? (
-                        settings.headerSubtitle.split('\n').map((l, idx) => <div key={idx}>{l}</div>)
+                    <div className="text-center text-[10px] text-neutral/80">
+                      {settings.headerSubtitle || settings.headerAddress ? (
+                        (settings.headerSubtitle || settings.headerAddress).split('\n').map((l, idx) => <div key={idx}>{l}</div>)
                       ) : (
-                        <>
-                          <div>AREA FESTE · VIA ASILO</div>
-                          <div>CAVAGLIO D&apos;AGOGNA (NO)</div>
-                        </>
+                        <div>Via Roma, 15 - Milano</div>
                       )}
                     </div>
+                    {settings.headerVat && <div className="text-center text-[9px] text-neutral/80">P.IVA / C.F.: {settings.headerVat}</div>}
+                    {settings.headerPhone && <div className="text-center text-[9px] text-neutral/80">Tel: {settings.headerPhone}</div>}
+                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
 
-                    <div className="border-b border-black/40 mb-2" />
+                    {/* Dicitura Documento Commerciale */}
+                    <div className="text-center text-[10px] font-bold mt-1">DOCUMENTO COMMERCIALE</div>
+                    <div className="text-center text-[9px] text-neutral/80 mb-2">di vendita o prestazione</div>
 
-                    {/* Dati Ordine 2 Colonne */}
-                    <div className="grid grid-cols-2 text-[10px] mb-1 font-sans">
-                      <div>DATA <span className="font-bold">19/07/2026</span></div>
-                      <div className="text-right">ORA <span className="font-bold">21:48</span></div>
+                    {/* Intestazione Tabella */}
+                    <div className="flex justify-between text-[10px] font-bold text-neutral/70">
+                      <span>DESCRIZIONE</span>
+                      <span>PREZZO</span>
                     </div>
-                    <div className="grid grid-cols-2 text-[10px] mb-2 font-sans">
-                      <div>TAVOLO <span className="font-bold">12</span></div>
-                      <div className="text-right font-bold">N. SCONTRINO 0047</div>
-                    </div>
+                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
-                    <div className="border-b border-black/40 mb-2" />
-
-                    {/* Tabella Articoli */}
-                    <div className="text-[10px] font-sans font-bold flex justify-between mb-1 text-black/70">
-                      <span className="w-10">Q.TÀ</span>
-                      <span className="flex-1">DESCRIZIONE</span>
-                      <span className="w-12 text-right">PREZZO</span>
-                    </div>
-
-                    <div className="space-y-1 text-[11px] font-sans">
+                    {/* Righe Articoli */}
+                    <div className="space-y-0.5 text-[10.5px] my-1">
                       <div className="flex justify-between items-baseline">
-                        <span className="w-10 font-bold">2</span>
-                        <span className="flex-1">Panini con salamella</span>
-                        <span className="w-12 text-right font-medium">6,00</span>
+                        <span>1 CAFFE ESPRESSO</span>
+                        <span>1,20</span>
                       </div>
                       <div className="flex justify-between items-baseline">
-                        <span className="w-10 font-bold">1</span>
-                        <span className="flex-1">Patatine fritte</span>
-                        <span className="w-12 text-right font-medium">3,00</span>
+                        <span>1 CAPPUCCINO</span>
+                        <span>1,80</span>
                       </div>
                       <div className="flex justify-between items-baseline">
-                        <span className="w-10 font-bold">1</span>
-                        <span className="flex-1">Birra piccola</span>
-                        <span className="w-12 text-right font-medium">4,00</span>
+                        <span>2 BRIOCHE (E 1,50)</span>
+                        <span>3,00</span>
                       </div>
-                      <div className="flex justify-between items-baseline text-green-700">
-                        <span className="w-10 font-bold">1</span>
-                        <span className="flex-1 font-bold">Panino porchetta (OMAGGIO)</span>
-                        <span className="w-12 text-right font-bold">0,00</span>
+                      <div className="flex justify-between items-baseline">
+                        <span>1 SPREMUTA D&apos;ARANCIA</span>
+                        <span>3,50</span>
                       </div>
                     </div>
 
-                    <div className="border-b border-black/40 my-3" />
+                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
+
+                    {/* Subtotale e Sconto */}
+                    <div className="space-y-0.5 text-[10.5px] my-1">
+                      <div className="flex justify-between items-baseline">
+                        <span>SUBTOTALE</span>
+                        <span>E 9,50</span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span>SCONTO</span>
+                        <span>E 0,00</span>
+                      </div>
+                    </div>
+
+                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
                     {/* Totale */}
-                    <div className="flex justify-between items-baseline font-sans font-black text-[18px] text-black">
+                    <div className="flex justify-between items-baseline font-black text-[13px] my-1">
                       <span>TOTALE</span>
-                      <span className="text-[20px]">13,00</span>
+                      <span>E 9,50</span>
                     </div>
 
-                    <div className="mt-2 text-[10px] font-sans text-neutral uppercase">PAGAMENTO CONTANTI</div>
+                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
+
+                    {/* Pagamento */}
+                    <div className="text-[10px] mt-1">PAGAMENTO</div>
+                    <div className="flex justify-between items-baseline text-[10.5px]">
+                      <span>ELETTRONICO (POS)</span>
+                      <span>E 9,50</span>
+                    </div>
+                    <div className="flex justify-between items-baseline text-[10.5px]">
+                      <span>RESTO</span>
+                      <span>E 0,00</span>
+                    </div>
+
+                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
+
+                    {/* Dati Fiscali / Ordine */}
+                    <div className="space-y-0.5 text-[9.5px] text-neutral/80 my-1">
+                      <div className="flex justify-between">
+                        <span>N. DOC.:</span>
+                        <span>0042-0112</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>DATA:</span>
+                        <span>07/09/2026</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>ORA:</span>
+                        <span>15:20</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>CASSA: 01</span>
+                        <span>OPER: 003</span>
+                      </div>
+                    </div>
+
+                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
 
                     {/* Ringraziamento */}
-                    <div className="mt-4 text-center font-sans text-[11px] uppercase font-bold tracking-wider leading-relaxed text-black/80">
-                      {settings.footerText ? (
-                        settings.footerText.split('\n').map((l, idx) => <div key={idx}>{l}</div>)
-                      ) : (
-                        <>
-                          <div>GRAZIE</div>
-                          <div className="text-[10px] text-neutral">PER AVER SCELTO LA NOSTRA SAGRA!</div>
-                        </>
-                      )}
+                    <div className="text-center font-bold text-[10.5px] my-1">
+                      {settings.footerText || "GRAZIE E ARRIVEDERCI!"}
                     </div>
 
-                    {/* Grafica Piè di Pagina */}
-                    {settings.footerLogoBase64 && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={settings.footerLogoBase64} alt="Grafica Footer" className="max-h-16 mx-auto mt-3 object-contain" />
-                    )}
+                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
                   </div>
 
-                  {/* Talloncino Comanda Singolo */}
+                  {/* Talloncino Comanda Salva-Carta 32 colonne */}
                   <div className="bg-white text-black p-4 rounded-xl font-mono text-[11px] shadow-md border border-neutral/20 leading-tight">
-                    <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans">Esempio Talloncino Articolo</div>
+                    <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans">Talloncino Comanda (Salva-Carta)</div>
 
                     {settings.comandaShowHeader && (
                       <>
-                        {settings.headerLogoBase64 ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={settings.headerLogoBase64} alt="Logo" className="max-h-10 mx-auto mb-1 object-contain" />
-                        ) : (
-                          <div className="text-center font-bold text-[11px] text-blue-900">{settings.headerName || "CAVAGLIO SOTTO LE STELLE"}</div>
-                        )}
-                        <div className="text-center text-[8px] text-neutral uppercase font-sans mb-2 leading-tight">
-                          {settings.headerSubtitle ? (
-                            settings.headerSubtitle.split('\n').map((l, idx) => <div key={idx}>{l}</div>)
-                          ) : (
-                            <div>AREA FESTE · CAVAGLIO D&apos;AGOGNA</div>
-                          )}
-                        </div>
-                        <div className="border-b border-black/40 mb-2" />
+                        <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
+                        <div className="text-center font-bold text-[11px]">{settings.headerName || "BAR NUVOLA S.R.L."}</div>
+                        <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
                       </>
                     )}
 
-                    <div className="flex justify-between items-center my-2 font-sans font-black text-[14px]">
-                      <span>BIRRA PICCOLA</span>
-                      {settings.comandaShowPrice && <span>4,00</span>}
-                    </div>
+                    {!settings.comandaShowHeader && (
+                      <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
+                    )}
 
-                    <div className="border-b border-black/40 my-2" />
-
-                    <div className="flex justify-between items-center text-[9px] font-sans text-neutral/80 uppercase mb-2">
-                      <span>ORD. #0047  21:48</span>
+                    <div className="flex justify-between items-center text-[10px] font-bold text-neutral/80">
+                      <span>ORD. #0047 15:20</span>
                       <span>TAVOLO 12</span>
                     </div>
 
-                    <div className="border-b border-black/40 mb-2" />
+                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
 
-                    <div className="text-center font-bold text-[12px] font-sans text-primary my-1">
-                      {settings.comandaGreeting || "Buona Sagra! ★"}
+                    <div className="flex justify-between items-center my-1.5 font-bold text-[12px]">
+                      <span>1x BIRRA PICCOLA</span>
+                      {settings.comandaShowPrice && <span>E 4,00</span>}
                     </div>
+                    <div className="text-[9.5px] text-neutral/80 pl-2 mb-1">* ROSSA MEDIA</div>
+
+                    <div className="text-center text-neutral/40 select-none text-[10px] -my-1">--------------------------------</div>
+
+                    <div className="text-center font-bold text-[10.5px] my-1">
+                      {settings.comandaGreeting || "GRAZIE E BUONA SAGRA!"}
+                    </div>
+
+                    <div className="text-center text-neutral/40 select-none text-[10px]">================================</div>
                   </div>
                 </div>
               </div>

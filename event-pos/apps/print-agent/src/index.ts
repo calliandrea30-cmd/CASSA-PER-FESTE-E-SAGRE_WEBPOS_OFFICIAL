@@ -462,165 +462,226 @@ function printRasterImage(printer: any, base64Data: string, maxWidth = 240) {
 }
 
 const DEFAULT_SETTINGS = {
-  headerName: 'CAVAGLIO SOTTO LE STELLE',
-  headerSubtitle: "AREA FESTE · VIA ASILO\nCAVAGLIO D'AGOGNA (NO)",
-  headerAddress: '', headerVat: '', headerPhone: '',
-  headerAlign: 'ct', headerSize: 'NORMAL',
-  headerLogoBase64: '', footerLogoBase64: '',
-  bodyFont: 'a', showOriginalPrice: true, showChangeAndDiscount: true,
-  dateFormat: 'SHORT', prepItemSize: 'DOUBLE_HEIGHT', prepNoteSize: 'NORMAL',
-  prepShowMetadata: true, prepVariantFormat: 'BRACKETS',
-  footerText: "GRAZIE\nPER AVER SCELTO LA NOSTRA SAGRA!\n— ★ —", footerShowCount: false,
-  comandaGreeting: 'Buona Sagra! ★',
+  headerName: 'BAR NUVOLA S.R.L.',
+  headerSubtitle: 'Via Roma, 15 - Milano',
+  headerAddress: '',
+  headerVat: '12345678901',
+  headerPhone: '02 1234567',
+  headerAlign: 'ct',
+  headerSize: 'NORMAL',
+  headerLogoBase64: '',
+  footerLogoBase64: '',
+  bodyFont: 'a',
+  showOriginalPrice: true,
+  showChangeAndDiscount: true,
+  dateFormat: 'SHORT',
+  prepItemSize: 'NORMAL',
+  prepNoteSize: 'NORMAL',
+  prepShowMetadata: true,
+  prepVariantFormat: 'BRACKETS',
+  footerText: 'GRAZIE E ARRIVEDERCI!',
+  comandaGreeting: 'GRAZIE E BUONA SAGRA!',
   comandaShowHeader: false,
   comandaShowPrice: true,
   printToDepartments: false,
 };
 
-function formatThreeColumns(col1: string, col2: string, col3: string, w1 = 7, w3 = 7, totalWidth = 40): string {
-  const c1 = String(col1 || '').padEnd(w1).substring(0, w1);
-  const c3 = String(col3 || '').padStart(w3).substring(0, w3);
-  const midWidth = Math.max(0, totalWidth - w1 - w3);
-  const c2 = String(col2 || '').padEnd(midWidth).substring(0, midWidth);
-  return c1 + c2 + c3;
+const LINE_EQ_32 = '================================';
+const LINE_DASH_32 = '--------------------------------';
+
+/** Pulisce e sanitizza qualsiasi stringa per eliminare caratteri Unicode corrotti su stampanti termiche */
+function cleanReceiptText(str: string): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/[àáâãäå]/g, 'a')
+    .replace(/[ÀÁÂÃÄÅ]/g, 'A')
+    .replace(/[èéêë]/g, 'e')
+    .replace(/[ÈÉÊË]/g, 'e')
+    .replace(/[ìíîï]/g, 'i')
+    .replace(/[ÌÍÎÏ]/g, 'I')
+    .replace(/[òóôõö]/g, 'o')
+    .replace(/[ÒÓÔÕÖ]/g, 'O')
+    .replace(/[ùúûü]/g, 'u')
+    .replace(/[ÙÚÛÜ]/g, 'U')
+    .replace(/·/g, '-')
+    .replace(/—/g, '-')
+    .replace(/–/g, '-')
+    .replace(/★/g, '*')
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .trim();
 }
 
-function printItemRow(printer: any, qty: number, name: string, price: string, width = 40) {
-  const w1 = 7;
-  const w3 = 7;
-  const midWidth = width - w1 - w3; // 26 caratteri per la descrizione
-
-  const c1 = String(qty).padEnd(w1).substring(0, w1);
-  const c3 = price.padStart(w3).substring(0, w3);
-
-  if (name.length <= midWidth) {
-    const c2 = name.padEnd(midWidth);
-    printer.text(c1 + c2 + c3);
-  } else {
-    // Prima riga con qtà, inizio descrizione e prezzo allineato a destra
-    const firstPart = name.substring(0, midWidth);
-    printer.text(c1 + firstPart + c3);
-    // Righe successive rientrate perfettamente sotto la colonna descrizione
-    let remaining = name.substring(midWidth);
-    while (remaining.length > 0) {
-      const chunk = remaining.substring(0, midWidth);
-      printer.text(' '.repeat(w1) + chunk);
-      remaining = remaining.substring(midWidth);
-    }
-  }
+/** Centra una riga su esattamente 32 caratteri */
+function centerLine(text: string, width = 32): string {
+  const clean = cleanReceiptText(text);
+  if (!clean) return '';
+  if (clean.length >= width) return clean.substring(0, width);
+  const pad = Math.floor((width - clean.length) / 2);
+  return ' '.repeat(pad) + clean + ' '.repeat(width - clean.length - pad);
 }
 
-// ─── Stampa scontrino cliente compatto ed elegante (Salva-Carta 40 colonne) ────
+/** Allinea due colonne su esattamente 32 caratteri */
+function alignTwoColumns(left: string, right: string, width = 32): string {
+  const l = cleanReceiptText(left);
+  const r = cleanReceiptText(right);
+  const maxLeft = Math.max(0, width - r.length - 1);
+  const truncatedLeft = l.length > maxLeft ? l.substring(0, maxLeft) : l;
+  const spaces = Math.max(1, width - truncatedLeft.length - r.length);
+  return truncatedLeft + ' '.repeat(spaces) + r;
+}
+
+// ─── Stampa scontrino cliente a 32 colonne (Documento Commerciale) ─────────────
 function printScontrino(printer: any, payload: any, settings: any) {
-  const lineDivider = '----------------------------------------'; // 40 caratteri esatti
+  printer.font('a').size(1, 1).style('normal').align('lt');
 
-  // 1. Logo compatto in testata (se configurato) o Nome Evento
+  // 1. Intestazione Azienda / Evento (centrata, 32 caratteri)
+  printer.text(LINE_EQ_32);
   if (settings.headerLogoBase64) {
     printRasterImage(printer, settings.headerLogoBase64, 240);
-  } else if (settings.headerName) {
-    printer.align('ct').style('b').text(settings.headerName).style('normal');
   }
+  const name = settings.headerName || 'BAR NUVOLA S.R.L.';
+  printer.text(centerLine(name, 32));
 
-  // Sottotitolo compatto (fino a 2 righe, es. Area Feste / Via Asilo)
-  const rawSubtitle = settings.headerSubtitle || settings.headerAddress || '';
-  if (rawSubtitle) {
-    printer.align('ct').style('normal');
-    rawSubtitle.split('\n').map((l: string) => l.trim()).filter(Boolean).slice(0, 2).forEach((line: string) => {
-      printer.text(line);
+  const addr = settings.headerSubtitle || settings.headerAddress || '';
+  if (addr) {
+    addr.split('\n').map((l: string) => l.trim()).filter(Boolean).forEach((line: string) => {
+      printer.text(centerLine(line, 32));
     });
   }
-
-  printer.text(lineDivider);
-
-  // 2. Riga metadati elegante (Data, Ora, #Scontrino e Tavolo come da foto)
-  const orderDate = new Date(payload.createdAt || Date.now());
-  const dateStr = orderDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const timeStr = orderDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  const orderNumStr = String(payload.orderNumber || 0).padStart(4, '0');
-
-  let tableOrCustomer = 'ASPORTO';
-  if (payload.customerName && payload.customerName !== 'Asporto / Generico') {
-    const isTavolo = /^tavolo\s*\d+/i.test(payload.customerName.trim());
-    tableOrCustomer = isTavolo ? payload.customerName.toUpperCase() : `TAV. ${payload.customerName.toUpperCase()}`;
+  if (settings.headerVat) {
+    printer.text(centerLine(`P.IVA / C.F.: ${settings.headerVat}`, 32));
   }
+  if (settings.headerPhone) {
+    printer.text(centerLine(`Tel: ${settings.headerPhone}`, 32));
+  }
+  printer.text(LINE_EQ_32);
 
-  printer.align('lt').font('a');
-  printer.text(formatTwoColumns(`DATA   ${dateStr}`, `ORA  ${timeStr}`, 40));
-  printer.text(formatTwoColumns(tableOrCustomer, `N. SCONTRINO ${orderNumStr}`, 40));
-  printer.text(lineDivider);
+  // 2. Dicitura Documento Commerciale
+  printer.text(centerLine('DOCUMENTO COMMERCIALE', 32));
+  printer.text(centerLine('di vendita o prestazione', 32));
+  printer.text(' ');
 
-  // 3. Intestazione colonne articoli (esattamente come da foto)
-  printer.text(formatThreeColumns('Q.TÀ', 'DESCRIZIONE', 'PREZZO', 7, 7, 40));
+  // 3. Intestazione tabella articoli (24 car descrizione + 8 car prezzo = 32 car)
+  printer.text('DESCRIZIONE             PREZZO  ');
+  printer.text(LINE_DASH_32);
 
-  // 4. Righe articoli (allineamento perfetto a 3 colonne)
+  // 4. Righe Articoli
+  let subtotalCalc = 0;
   payload.items.forEach((item: any) => {
     const isOmaggio = (item.priceAtTime === 0 && (!payload.discount || payload.discount === 0)) ||
       (item.note && item.note.includes('OMAGGIO')) ||
       (item.variantName && item.variantName.includes('OMAGGIO'));
 
     const priceNum = isOmaggio ? 0 : item.priceAtTime * item.quantity;
+    subtotalCalc += priceNum;
     const priceFormatted = priceNum.toFixed(2).replace('.', ',');
 
-    let itemDesc = item.product?.name || 'Articolo';
+    let itemDesc = `${item.quantity} ${cleanReceiptText(item.product?.name || 'Articolo').toUpperCase()}`;
+    if (item.quantity > 1 && item.priceAtTime > 0) {
+      const unitStr = `(E ${item.priceAtTime.toFixed(2).replace('.', ',')})`;
+      if (itemDesc.length + unitStr.length + 1 <= 24) {
+        itemDesc += ` ${unitStr}`;
+      }
+    }
     if (isOmaggio) itemDesc += ' (OMAGGIO)';
-    if (item.variantName && !item.variantName.includes('OMAGGIO')) {
-      itemDesc += ` [${item.variantName}]`;
+
+    const priceCol = priceFormatted.padStart(6) + '  '; // 8 caratteri
+
+    if (itemDesc.length <= 24) {
+      printer.text(itemDesc.padEnd(24) + priceCol);
+    } else {
+      printer.text(itemDesc.substring(0, 24) + priceCol);
+      let rem = itemDesc.substring(24).trim();
+      while (rem.length > 0) {
+        printer.text('  ' + rem.substring(0, 30));
+        rem = rem.substring(30).trim();
+      }
     }
 
-    printItemRow(printer, item.quantity, itemDesc, priceFormatted, 40);
-
-    // Note essenziali
-    const cleanNote = (item.note || '').replace(/\[OMAGGIO\]/g, '').trim();
-    if (cleanNote) {
-      printer.text(`       * ${cleanNote}`);
+    // Varianti o note articolo
+    const cleanVariant = item.variantName && !item.variantName.includes('OMAGGIO') ? cleanReceiptText(item.variantName) : '';
+    const cleanNote = cleanReceiptText((item.note || '').replace(/\[OMAGGIO\]/g, ''));
+    if (cleanVariant || cleanNote) {
+      const detail = [cleanVariant, cleanNote].filter(Boolean).join(' - ');
+      printer.text(`  * ${detail}`);
     }
 
+    // Combo items
     if (item.product?.isCombo && item.product?.comboItems) {
       item.product.comboItems.forEach((cItem: any) => {
-        printer.text(`       - ${cItem.quantity * item.quantity}x ${cItem.component?.name || 'Componente'}`);
+        printer.text(`  - ${cItem.quantity * item.quantity}x ${cleanReceiptText(cItem.component?.name || 'Componente')}`);
       });
     }
   });
 
-  printer.text(lineDivider);
+  printer.text(LINE_DASH_32);
 
-  // 5. Sconto (se presente) e Totale
+  // 5. Subtotale e Sconto
+  const subFormatted = subtotalCalc.toFixed(2).replace('.', ',');
+  printer.text(alignTwoColumns('SUBTOTALE', `E ${subFormatted} `, 32));
+
   if (payload.discount && Number(payload.discount) > 0) {
-    const scontoFormatted = `-${Number(payload.discount).toFixed(2).replace('.', ',')}`;
-    printer.text(formatTwoColumns('SCONTO', scontoFormatted, 40));
+    const scontoFormatted = Number(payload.discount).toFixed(2).replace('.', ',');
+    printer.text(alignTwoColumns('SCONTO', `-E ${scontoFormatted} `, 32));
+  } else {
+    printer.text(alignTwoColumns('SCONTO', 'E 0,00 ', 32));
   }
 
+  printer.text(' ');
+  printer.text(LINE_DASH_32);
+
+  // 6. Totale (grassetto, 32 colonne)
   const totFormatted = Number(payload.totalAmount || 0).toFixed(2).replace('.', ',');
   printer.style('b');
-  printer.text(formatTwoColumns('TOTALE', totFormatted, 40));
+  printer.text(alignTwoColumns('TOTALE', `E ${totFormatted} `, 32));
   printer.style('normal');
+  printer.text(LINE_DASH_32);
 
-  // Metodo di pagamento
-  const paymentMethod = payload.paymentType === 'CARD' ? 'CARTA' : 'CONTANTI';
-  printer.text(' ');
-  printer.text(`PAGAMENTO  ${paymentMethod}`);
+  // 7. Pagamento
+  printer.text('PAGAMENTO                       ');
+  const paymentMethod = payload.paymentType === 'CARD' ? 'ELETTRONICO (POS)' : 'CONTANTI';
+  printer.text(alignTwoColumns(paymentMethod, `E ${totFormatted} `, 32));
+  printer.text(alignTwoColumns('RESTO', 'E 0,00 ', 32));
 
-  // 6. Ringraziamento & Grafica Piè di Pagina (come da foto)
-  printer.text(' ').align('ct');
-  if (settings.footerText) {
-    settings.footerText.split('\n').map((l: string) => l.trim()).filter(Boolean).forEach((line: string) => {
-      printer.text(line);
-    });
-  } else {
-    printer.text('GRAZIE');
-    printer.text('PER AVER SCELTO LA NOSTRA SAGRA!');
-    printer.text('— ★ —');
+  printer.text(LINE_DASH_32);
+
+  // 8. Metadati Fiscali / Ordine
+  const orderDate = new Date(payload.createdAt || Date.now());
+  const dateStr = orderDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = orderDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const orderNumStr = String(payload.orderNumber || 0).padStart(4, '0');
+
+  printer.text(alignTwoColumns('N. DOC.:', `${orderNumStr}-0001`, 32));
+  printer.text(alignTwoColumns('DATA:', dateStr, 32));
+  printer.text(alignTwoColumns('ORA:', timeStr, 32));
+
+  let tableOrCustomer = 'ASPORTO';
+  if (payload.customerName && payload.customerName !== 'Asporto / Generico') {
+    tableOrCustomer = payload.customerName.toUpperCase().replace(/^TAVOLO\s*/i, 'TAV. ');
   }
+  const stationLabel = payload.stationId ? `CASSA: ${payload.stationId.substring(0, 2).toUpperCase()}` : 'CASSA: 01';
+  printer.text(alignTwoColumns(stationLabel, tableOrCustomer, 32));
+
+  printer.text(LINE_DASH_32);
+
+  // 9. Chiusura e Ringraziamento
+  printer.text(LINE_EQ_32);
+  const footerText = settings.footerText || 'GRAZIE E ARRIVEDERCI!';
+  footerText.split('\n').map((l: string) => l.trim()).filter(Boolean).forEach((line: string) => {
+    printer.text(centerLine(line, 32));
+  });
+  printer.text(LINE_EQ_32);
 
   if (settings.footerLogoBase64) {
     printRasterImage(printer, settings.footerLogoBase64, 240);
   }
 
-  // 7. Taglio rapido senza spreco di carta
+  // 10. Taglio immediato (nessun foglio sprecato)
   printer.text(' ').cut();
 }
 
-// ─── Stampa talloncini comanda compatti per i reparti (Salva-Carta 40 colonne) ─
+// ─── Stampa talloncini comanda compatti a 32 colonne (Salva-Carta) ─────────────
 function printComande(printer: any, payload: any, settings: any, categoryFilter?: string) {
   const prepList: any[] = [];
 
@@ -660,39 +721,34 @@ function printComande(printer: any, payload: any, settings: any, categoryFilter?
 
   if (filtered.length === 0) return;
 
-  const lineDivider = '----------------------------------------'; // 40 caratteri
   const orderNumStr = String(payload.orderNumber || 0).padStart(4, '0');
   const timeStr = new Date(payload.createdAt || Date.now()).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
   let tableOrCustomer = 'ASPORTO';
   if (payload.customerName && payload.customerName !== 'Asporto / Generico') {
-    const isTavolo = /^tavolo\s*\d+/i.test(payload.customerName.trim());
-    tableOrCustomer = isTavolo ? payload.customerName.toUpperCase() : `TAV. ${payload.customerName.toUpperCase()}`;
+    tableOrCustomer = payload.customerName.toUpperCase().replace(/^TAVOLO\s*/i, 'TAV. ');
   }
 
   filtered.forEach((prep: any) => {
-    printer.align('lt').font('a');
+    printer.font('a').size(1, 1).style('normal').align('lt');
 
-    // 1. Intestazione facoltativa talloncino (attivabile in impostazioni)
+    // 1. Intestazione facoltativa (solo se abilitata nelle impostazioni)
     if (settings.comandaShowHeader) {
+      printer.text(LINE_EQ_32);
       if (settings.headerLogoBase64) {
         printRasterImage(printer, settings.headerLogoBase64, 200);
-      } else if (settings.headerName) {
-        printer.align('ct').style('b').text(settings.headerName).style('normal');
       }
-      const rawSubtitle = settings.headerSubtitle || settings.headerAddress || '';
-      if (rawSubtitle) {
-        printer.align('ct').style('normal');
-        rawSubtitle.split('\n').map((l: string) => l.trim()).filter(Boolean).slice(0, 2).forEach((line: string) => {
-          printer.text(line);
-        });
-      }
-      printer.text(lineDivider);
+      printer.text(centerLine(settings.headerName || 'BAR NUVOLA S.R.L.', 32));
+      printer.text(LINE_EQ_32);
     } else {
-      printer.text(lineDivider);
+      printer.text(LINE_EQ_32);
     }
 
-    // 2. Articolo in risalto (grande e in grassetto come nella foto)
+    // 2. Numero Ordine, Ora e Tavolo ben chiari
+    printer.text(alignTwoColumns(`ORD. #${orderNumStr} ${timeStr}`, tableOrCustomer, 32));
+    printer.text(LINE_DASH_32);
+
+    // 3. Articolo in risalto (font standard ben visibile con eventuale prezzo a lato)
     const isOmaggio = (prep.priceAtTime === 0 && (!payload.discount || payload.discount === 0)) ||
       (prep.note && prep.note.includes('OMAGGIO')) ||
       (prep.variantName && prep.variantName.includes('OMAGGIO'));
@@ -701,53 +757,38 @@ function printComande(printer: any, payload: any, settings: any, categoryFilter?
     if (isOmaggio) {
       rightCol = 'OMAGGIO';
     } else if (settings.comandaShowPrice !== false && typeof prep.priceAtTime === 'number' && prep.priceAtTime > 0) {
-      rightCol = prep.priceAtTime.toFixed(2).replace('.', ',');
+      rightCol = `E ${prep.priceAtTime.toFixed(2).replace('.', ',')}`;
     }
 
-    printer.align('lt');
-    if (settings.prepItemSize === 'GIANT') {
-      printer.size(2, 2).style('b');
-    } else if (settings.prepItemSize === 'NORMAL') {
-      printer.size(1, 1).style('b');
-    } else {
-      printer.size(1, 2).style('b'); // Default DOUBLE_HEIGHT: mantiene 40 colonne
-    }
-
-    const itemTitle = prep.name.toUpperCase();
+    printer.style('b');
+    const itemTitle = `1x ${cleanReceiptText(prep.name).toUpperCase()}`;
     if (rightCol) {
-      printer.text(formatTwoColumns(itemTitle, rightCol, 40));
+      printer.text(alignTwoColumns(itemTitle, rightCol, 32));
     } else {
       printer.text(itemTitle);
     }
-    printer.size(1, 1).style('normal');
+    printer.style('normal');
 
     // Varianti o note
-    const cleanVariant = prep.variantName && !prep.variantName.includes('OMAGGIO') ? prep.variantName : '';
-    const cleanNote = (prep.note || '').replace(/\[OMAGGIO\]/g, '').trim();
+    const cleanVariant = prep.variantName && !prep.variantName.includes('OMAGGIO') ? cleanReceiptText(prep.variantName) : '';
+    const cleanNote = cleanReceiptText((prep.note || '').replace(/\[OMAGGIO\]/g, ''));
     if (cleanVariant || cleanNote) {
       const detail = [cleanVariant, cleanNote].filter(Boolean).join(' - ');
       printer.text(`   * ${detail}`);
     }
     if (prep.comboName) {
-      printer.text(`   [Menu: ${prep.comboName}]`);
+      printer.text(`   [Menu: ${cleanReceiptText(prep.comboName)}]`);
     }
 
-    // 3. Metadati Ordine minimi (per riconoscimento al bancone o cucina)
-    printer.text(lineDivider);
-    printer.text(formatTwoColumns(`ORD. #${orderNumStr}  ${timeStr}`, tableOrCustomer, 40));
-    printer.text(lineDivider);
+    // 4. Augurio finale e chiusura
+    printer.text(LINE_DASH_32);
+    const greeting = settings.comandaGreeting || 'GRAZIE E BUONA SAGRA!';
+    greeting.split('\n').map((l: string) => l.trim()).filter(Boolean).forEach((line: string) => {
+      printer.text(centerLine(line, 32));
+    });
+    printer.text(LINE_EQ_32);
 
-    // 4. Augurio finale (es. Buona Sagra! ★)
-    const greeting = settings.comandaGreeting || 'Buona Sagra! ★';
-    if (greeting) {
-      printer.align('ct').style('b');
-      greeting.split('\n').map((l: string) => l.trim()).filter(Boolean).forEach((line: string) => {
-        printer.text(line);
-      });
-      printer.style('normal');
-    }
-
-    // 5. Taglio rapido senza spreco di carta
+    // 5. Taglio rapido
     printer.text(' ').cut();
   });
 }
@@ -773,7 +814,7 @@ function printOnAdapter(
       return onDone(openErr);
     }
 
-    const printer = new escpos.Printer(device);
+    const printer = new escpos.Printer(device, { encoding: 'CP858' });
     console.log(`[Printer] ✅ Stampa su "${printerConfig.name}" (${printerConfig.type === 'NETWORK' ? printerConfig.networkHost : `USB VID:${printerConfig.usbVendorId?.toString(16)}`})`);
 
     try {
@@ -798,23 +839,22 @@ async function sendAck(jobId: string, status: 'PRINTED' | 'ERROR', errorMsg?: st
       body: JSON.stringify({ status, errorMsg }),
     });
   } catch (e: any) {
-    console.warn(`[ACK] Impossibile inviare ACK per job ${jobId}:`, e.message);
+    console.warn(`[Ack] Invio fallito: ${e.message}`);
   }
 }
 
-// ─── Recupera job pending al riavvio ──────────────────────────────────────────
+// ─── Polling di recovery per job non stampati quando l'agent era offline ───────
 async function fetchPendingJobs(): Promise<any[]> {
   try {
-    const url = config.STATION_ID
-      ? `${config.SERVER_URL}/api/print-jobs/pending?stationId=${config.STATION_ID}`
-      : `${config.SERVER_URL}/api/print-jobs/pending`;
-    const res = await fetch(url);
-    if (res.ok) return res.json();
-  } catch (e) {}
-  return [];
+    const res = await fetch(`${config.SERVER_URL}/api/print-jobs/pending?stationId=${config.STATION_ID || ''}`);
+    if (!res.ok) return [];
+    return (await res.json()) as any[];
+  } catch {
+    return [];
+  }
 }
 
-// ─── Socket.IO ────────────────────────────────────────────────────────────────
+// ─── Connessione WebSocket e registrazione ─────────────────────────────────────
 const socket = io(config.SERVER_URL, {
   reconnection: true,
   reconnectionDelay: 5000,
@@ -832,10 +872,10 @@ socket.on('connect_error', () => {
 });
 
 socket.on('connect', async () => {
-  console.log(`[Socket] Connesso al server. ID: ${socket.id}`);
+  console.log(`[Socket] Connesso al server: ${config.SERVER_URL}`);
 
-  // Registra il print-agent con la propria stationId
-  socket.emit('print-agent-register', {
+  // Invia handshake di registrazione con ID della stazione
+  socket.emit('register-print-agent', {
     stationId: config.STATION_ID,
     agentId: config.AGENT_ID,
   });
@@ -900,46 +940,52 @@ async function processJob(job: any) {
       await new Promise<void>((resolve) => {
         printOnAdapter(printerConfig, (printer) => {
           const report = payload.reportData || {};
-          printer.font('a').align('ct').style('b').size(1, 2).text(
-            payload.type === 'REPORT_Z' ? 'CHIUSURA DI CASSA Z' : 'LETTURA X (RESOCONTO)'
-          );
-          printer.size(1, 1).style('normal').text('----------------------------------------').align('lt');
-          printer.text(formatTwoColumns(`Data: ${new Date().toLocaleDateString('it-IT')}`, `Ora: ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`, 40));
+          printer.font('a').size(1, 1).style('normal').align('lt');
+          printer.text(LINE_EQ_32);
+          const title = payload.type === 'REPORT_Z' ? 'CHIUSURA DI CASSA Z' : 'LETTURA X (RESOCONTO)';
+          printer.text(centerLine(title, 32));
+          printer.text(LINE_EQ_32);
+
+          const dateStr = new Date().toLocaleDateString('it-IT');
+          const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+          printer.text(alignTwoColumns(`Data: ${dateStr}`, `Ora: ${timeStr}`, 32));
           if (report.openedAt) {
-            printer.text(`Apertura: ${new Date(report.openedAt).toLocaleString('it-IT')}`);
+            printer.text(alignTwoColumns('Apertura:', new Date(report.openedAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }), 32));
           }
-          printer.text(`Ordini totali: ${report.orderCount || 0}`);
-          printer.text('----------------------------------------');
-          printer.style('b').text(formatTwoColumns('INCASSO LORDO', `EUR ${(report.totalGross || 0).toFixed(2)}`, 40)).style('normal');
+          printer.text(alignTwoColumns('Ordini totali:', String(report.orderCount || 0), 32));
+          printer.text(LINE_DASH_32);
+
+          printer.style('b').text(alignTwoColumns('INCASSO LORDO', `E ${(report.totalGross || 0).toFixed(2)}`, 32)).style('normal');
           if (report.totalDiscount && Number(report.totalDiscount) > 0) {
-            printer.text(formatTwoColumns('SCONTI TOTALI', `EUR -${Number(report.totalDiscount).toFixed(2)}`, 40));
+            printer.text(alignTwoColumns('SCONTI TOTALI', `-E ${Number(report.totalDiscount).toFixed(2)}`, 32));
           }
           if (report.paymentBreakdown) {
-            printer.text(formatTwoColumns('  Di cui Contanti:', `EUR ${(report.paymentBreakdown.CASH || 0).toFixed(2)}`, 40));
-            printer.text(formatTwoColumns('  Di cui Carta/POS:', `EUR ${(report.paymentBreakdown.CARD || 0).toFixed(2)}`, 40));
+            printer.text(alignTwoColumns('  Di cui Contanti:', `E ${(report.paymentBreakdown.CASH || 0).toFixed(2)}`, 32));
+            printer.text(alignTwoColumns('  Di cui Carta/POS:', `E ${(report.paymentBreakdown.CARD || 0).toFixed(2)}`, 32));
           }
-          printer.text('----------------------------------------');
-          printer.style('b').size(1, 2).text(formatTwoColumns('INCASSO NETTO', `EUR ${(report.totalNet || 0).toFixed(2)}`, 40)).size(1, 1).style('normal');
-          printer.text('----------------------------------------');
+          printer.text(LINE_DASH_32);
+          printer.style('b').text(alignTwoColumns('INCASSO NETTO', `E ${(report.totalNet || 0).toFixed(2)}`, 32)).style('normal');
+          printer.text(LINE_DASH_32);
+
           if (report.categoryBreakdown && Object.keys(report.categoryBreakdown).length > 0) {
-            printer.align('ct').style('b').text('VENDITE PER REPARTO').style('normal').align('lt');
+            printer.text(centerLine('VENDITE PER REPARTO', 32));
             Object.entries(report.categoryBreakdown).forEach(([cat, amount]: [string, any]) => {
-              printer.text(formatTwoColumns(cat, `EUR ${Number(amount).toFixed(2)}`, 40));
+              printer.text(alignTwoColumns(cleanReceiptText(cat), `E ${Number(amount).toFixed(2)}`, 32));
             });
-            printer.text('----------------------------------------');
+            printer.text(LINE_DASH_32);
           }
           if (report.productStats && Object.keys(report.productStats).length > 0) {
-            printer.align('ct').style('b').text('ARTICOLI VENDUTI').style('normal').align('lt');
+            printer.text(centerLine('ARTICOLI VENDUTI', 32));
             Object.entries(report.productStats).forEach(([prod, stat]: [string, any]) => {
-              printer.text(formatTwoColumns(`${stat.qty}x ${prod}`, `EUR ${Number(stat.total).toFixed(2)}`, 40));
+              printer.text(alignTwoColumns(`${stat.qty}x ${cleanReceiptText(prod)}`, `E ${Number(stat.total).toFixed(2)}`, 32));
             });
-            printer.text('----------------------------------------');
+            printer.text(LINE_DASH_32);
           }
-          if (payload.type === 'REPORT_Z') {
-            printer.align('ct').style('b').text('*** FINE CHIUSURA Z ***').style('normal').text(' ').cut();
-          } else {
-            printer.align('ct').style('b').text('*** FINE LETTURA X ***').style('normal').text(' ').cut();
-          }
+          printer.text(LINE_EQ_32);
+          const endMsg = payload.type === 'REPORT_Z' ? '*** FINE CHIUSURA Z ***' : '*** FINE LETTURA X ***';
+          printer.text(centerLine(endMsg, 32));
+          printer.text(LINE_EQ_32);
+          printer.text(' ').cut();
         }, resolve);
       });
 
@@ -956,22 +1002,23 @@ async function processJob(job: any) {
 
       await new Promise<void>((resolve) => {
         printOnAdapter(printerConfig, (printer) => {
-          printer.font('a').align('ct').style('b').size(1, 2).text('STORNO ORDINE');
-          printer.size(1, 1).style('normal').text('----------------------------------------').align('lt');
-          printer.text(`ORDINE ORIGINALE: #${order.orderNumber}`);
-          printer.text(`STORNATO IL: ${new Date().toLocaleString('it-IT')}`);
-          printer.text('----------------------------------------');
+          printer.font('a').size(1, 1).style('normal').align('lt');
+          printer.text(LINE_EQ_32);
+          printer.text(centerLine('STORNO ORDINE', 32));
+          printer.text(LINE_EQ_32);
+          printer.text(alignTwoColumns('ORD. ORIGINALE:', `#${order.orderNumber}`, 32));
+          printer.text(alignTwoColumns('DATA STORNATO:', new Date().toLocaleDateString('it-IT'), 32));
+          printer.text(LINE_DASH_32);
           order.items.forEach((item: any) => {
-            const varName = item.variantName
-              ? settings.prepVariantFormat === 'BRACKETS' ? ` [${item.variantName}]` : ` * ${item.variantName}`
-              : '';
-            const line = `-${item.quantity}x ${item.product.name}${varName}`;
-            const total = (item.priceAtTime * item.quantity * -1).toFixed(2);
-            printer.text(formatTwoColumns(line, total, 40));
+            const varName = item.variantName ? ` [${cleanReceiptText(item.variantName)}]` : '';
+            const line = `-${item.quantity}x ${cleanReceiptText(item.product.name)}${varName}`;
+            const total = `-${(item.priceAtTime * item.quantity).toFixed(2)}`;
+            printer.text(alignTwoColumns(line, total, 32));
           });
-          printer.text('----------------------------------------').align('ct').style('b');
-          printer.text(formatTwoColumns('TOTALE STORNO: EUR', `-${order.totalAmount.toFixed(2)}`, 40));
-          printer.style('normal').text(' ').cut();
+          printer.text(LINE_DASH_32);
+          printer.style('b').text(alignTwoColumns('TOTALE STORNO:', `-E ${order.totalAmount.toFixed(2)}`, 32)).style('normal');
+          printer.text(LINE_EQ_32);
+          printer.text(' ').cut();
         }, resolve);
       });
 
