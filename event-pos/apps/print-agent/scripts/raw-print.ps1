@@ -10,16 +10,24 @@ if (-not $FilePath -or -not (Test-Path $FilePath)) {
     exit 1
 }
 
-# Se il nome della stampante non e fornito o e generico, cerca la predefinita o una stampante POS
-if (-not $PrinterName -or $PrinterName.Trim() -eq "" -or $PrinterName -match "Predefinita|Sistema|default") {
-    $pDef = Get-CimInstance Win32_Printer | Where-Object Default | Select-Object -First 1
-    if ($pDef) {
-        $PrinterName = $pDef.Name
+# Elenco stampanti installate su Windows
+$allPrinters = @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name)
+
+# Se il nome della stampante non e fornito, e generico o non esiste tra quelle installate, cerca la migliore
+$isDummy = (-not $PrinterName) -or ($PrinterName.Trim() -eq "") -or ($PrinterName -match "Predefinita|Sistema|default|Stampante|Cassa|POS") -or ($allPrinters -notcontains $PrinterName)
+
+if ($isDummy) {
+    # 1. Cerca prioritariamente una stampante POS / termica per nome
+    $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin" } | Select-Object -First 1
+    if ($pPos) {
+        $PrinterName = $pPos.Name
     } else {
-        $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "POS|80|Thermal|Receipt|Xprinter|Epson|Custom|Stampante" } | Select-Object -First 1
-        if ($pPos) {
-            $PrinterName = $pPos.Name
+        # 2. Stampante predefinita di Windows
+        $pDef = Get-CimInstance Win32_Printer | Where-Object Default | Select-Object -First 1
+        if ($pDef) {
+            $PrinterName = $pDef.Name
         } else {
+            # 3. Prima stampante disponibile
             $pAny = Get-CimInstance Win32_Printer | Select-Object -First 1
             if ($pAny) { $PrinterName = $pAny.Name }
         }

@@ -241,48 +241,55 @@ function findAnyUSBPrinter() {
     }
     return null;
 }
-/** Rileva la stampante predefinita di default del sistema operativo (macOS o Windows) */
-function getDefaultSystemPrinter() {
+/** Enumera tutte le stampanti installate nel sistema operativo (macOS o Windows) */
+function getAvailableSystemPrinters() {
     const isWin = process.platform === 'win32';
     try {
         if (isWin) {
-            // 1. Stampante predefinita di Windows
-            const cmdDef = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object Default | Select-Object -First 1).Name"';
-            const outDef = (0, child_process_1.execSync)(cmdDef, { encoding: 'utf8', timeout: 3000 }).trim();
-            if (outDef)
-                return outDef;
-            // 2. Fallback: cerca stampante con nome POS o termico
-            const cmdPos = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object { $_.Name -match \'POS|80|Thermal|Receipt|Xprinter|Epson|Custom|Stampante\' } | Select-Object -First 1).Name"';
-            const outPos = (0, child_process_1.execSync)(cmdPos, { encoding: 'utf8', timeout: 3000 }).trim();
-            if (outPos)
-                return outPos;
-            // 3. Prima stampante disponibile
-            const cmdAny = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Select-Object -First 1).Name"';
-            const outAny = (0, child_process_1.execSync)(cmdAny, { encoding: 'utf8', timeout: 3000 }).trim();
-            return outAny || null;
+            const cmd = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer).Name"';
+            const out = (0, child_process_1.execSync)(cmd, { encoding: 'utf8', timeout: 3000 });
+            return out.split(/\r?\n/).map(p => p.trim()).filter(Boolean);
         }
         else {
-            // macOS / Linux CUPS
-            // 1. Controlla destinazione predefinita
+            const out = (0, child_process_1.execSync)('lpstat -e 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+            return out.split(/\r?\n/).map(p => p.trim()).filter(Boolean);
+        }
+    }
+    catch {
+        return [];
+    }
+}
+/** Rileva la migliore stampante termica POS o la predefinita di sistema */
+function getDefaultSystemPrinter() {
+    const printers = getAvailableSystemPrinters();
+    if (printers.length === 0)
+        return null;
+    // 1. Cerca prioritariamente una stampante POS / termica (es. Printer_POS_80, POS-80, XP-80, Thermal)
+    const posPrinter = printers.find(p => /POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin/i.test(p));
+    if (posPrinter)
+        return posPrinter;
+    // 2. Cerca la stampante predefinita di default del sistema operativo
+    const isWin = process.platform === 'win32';
+    try {
+        if (isWin) {
+            const cmdDef = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object Default | Select-Object -First 1).Name"';
+            const outDef = (0, child_process_1.execSync)(cmdDef, { encoding: 'utf8', timeout: 3000 }).trim();
+            if (outDef && printers.includes(outDef))
+                return outDef;
+        }
+        else {
             const dOut = (0, child_process_1.execSync)('lpstat -d 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
             const dMatch = dOut.match(/:\s*([^\r\n]+)/);
             if (dMatch && dMatch[1] && !dMatch[1].toLowerCase().includes('nessuna') && !dMatch[1].toLowerCase().includes('no default')) {
-                return dMatch[1].trim();
+                const def = dMatch[1].trim();
+                if (printers.includes(def))
+                    return def;
             }
-            // 2. Enumera le stampanti configurate con lpstat -e
-            const eOut = (0, child_process_1.execSync)('lpstat -e 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
-            const printers = eOut.split('\n').map(p => p.trim()).filter(Boolean);
-            // Cerca prioritariamente stampanti termiche / POS (es. Printer_POS_80, POS-80)
-            const posPrinter = printers.find(p => /POS|80|Receipt|Thermal|Xprinter|Epson|Custom|Stampante/i.test(p));
-            if (posPrinter)
-                return posPrinter;
-            // Altrimenti prima stampante CUPS disponibile
-            if (printers.length > 0)
-                return printers[0];
         }
     }
     catch { }
-    return null;
+    // 3. Fallback sulla prima stampante installata
+    return printers[0];
 }
 /** Adapter che invia byte ESC/POS RAW direttamente alla stampante predefinita di sistema */
 class SystemDefaultPrinterAdapter {
@@ -327,19 +334,24 @@ class SystemDefaultPrinterAdapter {
                     path_1.default.join(process.cwd(), 'scripts/raw-print.ps1'),
                 ];
                 const psScript = candidates.find(p => fs_1.default.existsSync(p)) || candidates[0];
-                const isDummy = !this.printerName || this.printerName.includes('Predefinita') || this.printerName === 'Sistema' || this.printerName === 'default';
-                const pArg = (!isDummy && this.printerName) ? `-PrinterName "${this.printerName}"` : '';
+                const pArg = this.printerName ? `-PrinterName "${this.printerName}"` : '';
                 const psCmd = `powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}" ${pArg} -FilePath "${tmpFile}"`;
                 (0, child_process_1.execSync)(psCmd, { timeout: 10000 });
             }
             else {
-                const isDummy = !this.printerName || this.printerName.includes('Predefinita') || this.printerName === 'Sistema' || this.printerName === 'default';
-                const target = (!isDummy && this.printerName) ? this.printerName : getDefaultSystemPrinter();
+                // macOS / Linux CUPS
+                const available = getAvailableSystemPrinters();
+                const isRealPrinter = Boolean(this.printerName && available.includes(this.printerName));
+                const target = isRealPrinter ? this.printerName : getDefaultSystemPrinter();
                 if (target) {
+                    // Riabilita la coda di stampa se temporaneamente in pausa
+                    try {
+                        (0, child_process_1.execSync)(`cupsenable "${target}" 2>/dev/null || true`, { timeout: 2000 });
+                    }
+                    catch { }
                     (0, child_process_1.execSync)(`lpr -l -P "${target}" "${tmpFile}"`, { timeout: 8000 });
                 }
                 else {
-                    // Nessuna stampante CUPS configurata: tenta lpr generico o logga avviso
                     try {
                         (0, child_process_1.execSync)(`lpr -l "${tmpFile}"`, { timeout: 5000 });
                     }
@@ -375,17 +387,34 @@ function openPrinterDevice(pc) {
         const adapter = new NetworkPrinterAdapter(pc.networkHost, pc.networkPort || 9100);
         return { device: adapter, isNetwork: true };
     }
-    // 2. Se specificati Vendor ID e Product ID manuali
+    // 2. Se su macOS o Windows è presente una stampante termica/POS o di sistema (es. Printer_POS_80)
+    // Usiamo prioritariamente l'adapter di sistema: è affidabile al 100%, non si disconnette e non confligge con i driver USB dell'OS
+    const availablePrinters = getAvailableSystemPrinters();
+    const isGenericDummy = !pc?.name ||
+        ['stampante', 'predefinita', 'sistema', 'default', 'cassa', 'pos'].includes(pc.name.trim().toLowerCase());
+    let targetPrinter = null;
+    if (pc?.name && !isGenericDummy && availablePrinters.includes(pc.name)) {
+        targetPrinter = pc.name;
+    }
+    else {
+        targetPrinter = getDefaultSystemPrinter();
+    }
+    if (targetPrinter) {
+        console.log(`[Auto-Detect] Stampante di sistema attiva selezionata: "${targetPrinter}"`);
+        const sysAdapter = new SystemDefaultPrinterAdapter(targetPrinter);
+        return { device: sysAdapter, isNetwork: false };
+    }
+    // 3. Se specificati Vendor ID e Product ID manuali (es. Linux senza spooler)
     if (pc && pc.usbVendorId && pc.usbProductId) {
         try {
             const adapter = new CustomUSBAdapter(pc.usbVendorId, pc.usbProductId);
             return { device: adapter, isNetwork: false };
         }
         catch (e) {
-            console.warn(`[Printer] USB VID:0x${pc.usbVendorId.toString(16)} non aperto via USB diretta (${e.message}). Uso stampante predefinita.`);
+            console.warn(`[Printer] USB VID:0x${pc.usbVendorId.toString(16)} non aperto via USB diretta: ${e.message}`);
         }
     }
-    // 3. ZERO-CONFIG: Cerca qualsiasi stampante termica USB collegata
+    // 4. ZERO-CONFIG: Cerca qualsiasi stampante termica USB collegata
     const anyUsb = findAnyUSBPrinter();
     if (anyUsb) {
         try {
@@ -394,13 +423,11 @@ function openPrinterDevice(pc) {
             return { device: adapter, isNetwork: false };
         }
         catch (e) {
-            console.log(`[Auto-Detect] Porta USB diretta occupata dal driver (${e.message}). Passo alla stampante di sistema.`);
+            console.log(`[Auto-Detect] USB diretta non disponibile (${e.message}).`);
         }
     }
-    // 4. ZERO-CONFIG DEFAULT: Usa la stampante predefinita di sistema
-    const defaultName = getDefaultSystemPrinter();
-    console.log(`[Auto-Detect] Uso stampante di sistema: "${defaultName || 'default'}"`);
-    const sysAdapter = new SystemDefaultPrinterAdapter(defaultName || undefined);
+    // 5. Fallback finale
+    const sysAdapter = new SystemDefaultPrinterAdapter();
     return { device: sysAdapter, isNetwork: false };
 }
 // ─── Helper: sceglie la stampante giusta (con default zero-config) ─────────────
