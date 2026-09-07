@@ -76,6 +76,17 @@ echo [OK] Tutte le librerie sono state installate con successo!
 :SKIP_NPM_INSTALL
 
 REM ----------------------------------------------------------------------------
+REM 2b. Compilazione Tipi Condivisi se mancanti
+REM ----------------------------------------------------------------------------
+if exist "%PROJECT_ROOT%packages\shared-types\dist\index.d.ts" goto :SKIP_TYPES_BUILD
+echo [INFO] Compilazione tipi condivisi...
+pushd "%PROJECT_ROOT%packages\shared-types"
+cmd /c npx tsc
+popd
+echo [OK] Tipi condivisi compilati!
+:SKIP_TYPES_BUILD
+
+REM ----------------------------------------------------------------------------
 REM 3. Generazione Database Client Prisma se mancante
 REM ----------------------------------------------------------------------------
 if exist "%PROJECT_ROOT%node_modules\.prisma\client\" goto :SKIP_PRISMA_GEN
