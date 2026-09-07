@@ -166,15 +166,14 @@ if "%SCELTA%"=="1" (
     echo ============================================================================
     echo                     SAGRA POS OPERATIVO! (CASSA 1)
     echo ============================================================================
-    echo   Cassa locale : http://localhost:3000
-    echo   Admin        : http://localhost:3000/admin
-    echo   Cucina (KDS) : http://localhost:3000/kds
+    echo   SU QUESTO COMPUTER : http://localhost:3000
     echo ----------------------------------------------------------------------------
-    echo   COLLEGA LE ALTRE CASSE O SMARTPHONE APRENDO QUESTO INDIRIZZO:
-    echo   👉 http://%SERVER_IP%:3000
+    echo   DA IPAD / TABLET / ALTRI COMPUTER:
+    echo   👉 Cucina (KDS) : http://%SERVER_IP%:3000/kds
+    echo   👉 Admin        : http://%SERVER_IP%:3000/admin
+    echo   👉 Cassa mobile : http://%SERVER_IP%:3000
     echo.
-    echo   Se usi Hotspot dal telefono: connetti tutti i dispositivi all'Hotspot
-    echo   e usa l'indirizzo IP mostrato sopra!
+    echo   ATTENZIONE: Sull'iPad NON scrivere 'localhost'! Usa l'indirizzo con %SERVER_IP%!
     echo.
     echo   NON CHIUDERE QUESTA FINESTRA DURANTE IL SERVIZIO!
     echo ============================================================================

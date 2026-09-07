@@ -200,19 +200,24 @@ PAEOF
     sleep 1
   done
 
+  LOCAL_HOST=$(scutil --get LocalHostName 2>/dev/null || hostname 2>/dev/null || echo "mac")
+
   echo ""
   echo "╔══════════════════════════════════════════════════════════════════╗"
   echo "║                ✅  SAGRA POS OPERATIVO! (CASSA 1)                ║"
   echo "╠══════════════════════════════════════════════════════════════════╣"
-  printf "║  🖥️  Cassa locale : %-44s║\n" "http://localhost:3000"
-  printf "║  👤  Admin        : %-44s║\n" "http://localhost:3000/admin"
-  printf "║  🍽️  Cucina (KDS) : %-44s║\n" "http://localhost:3000/kds"
+  printf "║  🖥️  SU QUESTO COMPUTER : %-39s║\n" "http://localhost:3000"
   echo "╠══════════════════════════════════════════════════════════════════╣"
-  printf "║  📱  COLLEGA LE ALTRE CASSE / SMARTPHONE A QUESTO INDIRIZZO:     ║\n"
-  printf "║      👉 http://%-47s║\n" "$SERVER_IP:3000"
+  echo "║  📱  DA IPAD / TABLET / ALTRI COMPUTER (Stesso Wi-Fi/Hotspot):  ║"
+  printf "║  👉 Cucina (KDS) : %-45s║\n" "http://$SERVER_IP:3000/kds"
+  printf "║  👉 Admin        : %-45s║\n" "http://$SERVER_IP:3000/admin"
+  printf "║  👉 Cassa mobile : %-45s║\n" "http://$SERVER_IP:3000"
   echo "║                                                                  ║"
-  echo "║  ⚠️  Se usi Hotspot dal telefono: connetti tutti i computer       ║"
-  echo "║     all'Hotspot e usa l'indirizzo IP mostrato sopra!             ║"
+  printf "║  🍏 Da iPad/iPhone puoi anche digitare:                          ║\n"
+  printf "║     👉 %-54s║\n" "http://$LOCAL_HOST.local:3000/kds"
+  echo "║                                                                  ║"
+  echo "║  ⚠️  ATTENZIONE: Sull'iPad NON scrivere 'localhost'!             ║"
+  echo "║     Usa uno degli indirizzi sopra indicati.                      ║"
   echo "║                                                                  ║"
   echo "║  ⚠️  NON CHIUDERE QUESTA FINESTRA DURANTE IL SERVIZIO            ║"
   echo "╚══════════════════════════════════════════════════════════════════╝"
