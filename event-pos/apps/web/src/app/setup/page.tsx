@@ -96,7 +96,7 @@ export default function SetupPage() {
 
         <footer className="mt-12 text-center">
           <p className="text-sm text-neutral/70">
-            Questa scelta viene salvata. Puoi cambiarla successivamente dall'interfaccia della cassa.
+            Questa scelta viene salvata. Puoi cambiarla successivamente dall&apos;interfaccia della cassa.
           </p>
         </footer>
       </div>

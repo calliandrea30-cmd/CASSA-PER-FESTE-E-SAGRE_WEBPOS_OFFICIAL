@@ -153,7 +153,7 @@ if !API_READY!==0 (
 
 :: ── 10. Avvia Web App ─────────────────────────────────────────────────────
 echo [INFO] Avvio Web App (porta 3000)...
-start /min "SagraPOS Web" cmd /c "cd /d "%~dp0apps\web" && npx next start -p 3000"
+start /min "SagraPOS Web" cmd /c "cd /d "%~dp0apps\web" && npx next start -p 3000 -H 0.0.0.0"
 
 :: ── 11. Build e avvio Print Agent ────────────────────────────────────────
 if not exist "apps\print-agent\dist\" (

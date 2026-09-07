@@ -1,0 +1,3 @@
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")/../../event-pos" && pwd)"
+osascript -e "tell application \"Terminal\" to do script \"cd \\\"$DIR\\\" && ./SagraPOS.command\" activate"

@@ -276,14 +276,25 @@ async function startServer(nodeBin) {
   addLog('🌐 Avvio Web App (porta 3000)...');
 
   // Prova prima con il server standalone (next build con output: 'standalone')
-  const standaloneServer = IS_DEV
-    ? null
-    : path.join(PATHS.web, '.next', 'standalone', 'server.js');
+  // In un monorepo, Next.js genera server.js in .next/standalone/apps/web/server.js
+  let standaloneServer = null;
+  let standaloneCwd = null;
+  if (!IS_DEV) {
+    const monoPath = path.join(PATHS.web, '.next', 'standalone', 'apps', 'web', 'server.js');
+    const directPath = path.join(PATHS.web, '.next', 'standalone', 'server.js');
+    if (fs.existsSync(monoPath)) {
+      standaloneServer = monoPath;
+      standaloneCwd = path.join(PATHS.web, '.next', 'standalone');
+    } else if (fs.existsSync(directPath)) {
+      standaloneServer = directPath;
+      standaloneCwd = path.join(PATHS.web, '.next', 'standalone');
+    }
+  }
 
   if (!IS_DEV && standaloneServer && fs.existsSync(standaloneServer)) {
     // Modalità produzione: usa il server standalone auto-generato da next build
     const webProc = spawn(nodeBin, [standaloneServer], {
-      cwd: path.join(PATHS.web, '.next', 'standalone'),
+      cwd: standaloneCwd,
       env: { ...process.env, NODE_ENV: 'production', PORT: '3000', HOSTNAME: '0.0.0.0' },
       windowsHide: true,
     });
@@ -292,11 +303,11 @@ async function startServer(nodeBin) {
     webProc.stderr.on('data', d => { const m = d.toString().trim(); if (m) addLog(`[web] ${m}`); });
     webProc.on('exit', (code) => { addLog(`[web] Terminato (${code})`); processes.web = null; updateStatus(); });
   } else {
-    // Modalità sviluppo o fallback: usa `next start`
+    // Modalità sviluppo o fallback: usa `next start` con binding su 0.0.0.0 (fondamentale per hotspot)
     const nextBin = IS_WIN
       ? path.join(PATHS.web, 'node_modules', '.bin', 'next.cmd')
       : path.join(PATHS.web, 'node_modules', '.bin', 'next');
-    const webProc = spawn(nextBin, ['start', '-p', '3000'], {
+    const webProc = spawn(nextBin, ['start', '-p', '3000', '-H', '0.0.0.0'], {
       cwd: PATHS.web,
       env: { ...process.env, NODE_ENV: 'production' },
       windowsHide: true,

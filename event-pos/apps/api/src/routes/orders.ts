@@ -5,11 +5,16 @@ export default async function (fastify: FastifyInstance) {
 
   // ── GET /orders/suspended ─────────────────────────────────────────────────
   fastify.get('/orders/suspended', async (request: any, reply) => {
-    const { eventId } = request.query;
+    const { eventId, stationId } = request.query;
     if (!eventId) return reply.code(400).send({ error: 'eventId required' });
 
+    // Se stationId è specificato, mostra solo i sospesi di quella cassa.
+    // Senza stationId mostra tutti (utile per l'admin).
+    const where: any = { eventId, status: 'SUSPENDED' };
+    if (stationId) where.stationId = stationId;
+
     return prisma.order.findMany({
-      where: { eventId, status: 'SUSPENDED' },
+      where,
       include: { items: { include: { product: { include: { category: true } } } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -303,21 +308,27 @@ export default async function (fastify: FastifyInstance) {
           },
         });
 
-        // Scontrino alla stampante della cassa specifica
+        // ── Routing stampa scontrino (CASHIER) ────────────────────────────
+        // Tentiamo la stanza specifica della cassa: print-agent:{stationId}
+        // Se non è connessa, tentiamo la stanza generica 'print-agents'.
+        // NON facciamo broadcast globale (evita che le pagine web ricevano eventi di stampa).
         const cashierRoom = `print-agent:${stationId}`;
         const rooms = fastify.io.sockets.adapter.rooms;
         if (rooms.has(cashierRoom)) {
           fastify.io.to(cashierRoom).emit('print-job', cashierJob);
-        } else {
-          fastify.io.emit('print-job', cashierJob); // fallback
+        } else if (rooms.has('print-agents')) {
+          // Fallback: primo agent disponibile nella stanza generica
+          fastify.io.to('print-agents').emit('print-job', cashierJob);
         }
+        // Se nessun agent è connesso, il job rimane nel DB con status QUEUED
+        // e verrà consegnato alla prossima connessione (polling o reconnect).
 
-        // Comande in broadcast a tutti i print-agent (ogni agente stampa i reparti suoi)
-        fastify.io.to('print-agents').emit('print-job', kitchenJob);
-        // Fallback se non ci sono print-agents registrati
-        if (!rooms.has('print-agents')) {
-          fastify.io.emit('print-job', kitchenJob);
+        // ── Routing comande cucina/bar (KITCHEN) ──────────────────────────
+        // In broadcast a tutti gli agent registrati: ognuno stampa i reparti suoi
+        if (rooms.has('print-agents')) {
+          fastify.io.to('print-agents').emit('print-job', kitchenJob);
         }
+        // Stessa logica: se nessun agent è connesso, il job è in DB (QUEUED).
       }
 
       return reply.code(201).send(order);

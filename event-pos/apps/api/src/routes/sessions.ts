@@ -114,9 +114,14 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
-    fastify.io.to(`event:${eventId}`).emit('print-job', printJob);
-    // Fallback se nessun agent è in stanza evento
-    fastify.io.emit('print-job', printJob);
+    // Emetti il job ai print-agent connessi (no broadcast globale)
+    const rooms = fastify.io.sockets.adapter.rooms;
+    if (rooms.has(`event:${eventId}`)) {
+      fastify.io.to(`event:${eventId}`).emit('print-job', printJob);
+    } else if (rooms.has('print-agents')) {
+      fastify.io.to('print-agents').emit('print-job', printJob);
+    }
+    // Se nessun agent connesso, il job è in DB con status QUEUED.
 
     return { status: 'ok' };
   });
@@ -153,7 +158,13 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
-    fastify.io.emit('print-job', printJob);
+    // Emetti il job ai print-agent (no broadcast globale)
+    const rooms2 = fastify.io.sockets.adapter.rooms;
+    if (rooms2.has(`event:${eventId}`)) {
+      fastify.io.to(`event:${eventId}`).emit('print-job', printJob);
+    } else if (rooms2.has('print-agents')) {
+      fastify.io.to('print-agents').emit('print-job', printJob);
+    }
 
 
     // Apri nuova sessione

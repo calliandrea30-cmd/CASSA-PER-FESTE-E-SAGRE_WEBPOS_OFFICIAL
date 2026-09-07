@@ -39,6 +39,7 @@ export default function AdminDashboard() {
   const [newStationName, setNewStationName] = useState("");
   const [editingStation, setEditingStation] = useState<any>(null);
   const [showPrinterModal, setShowPrinterModal] = useState<string | null>(null); // stationId
+  const [serverIPs, setServerIPs] = useState<string[]>([]); // tutti gli IP del server per hotspot
   const [newPrinter, setNewPrinter] = useState({
     name: "Stampante", type: "USB", role: "CASHIER",
     usbVendorId: "", usbProductId: "", networkHost: "", networkPort: "9100",
@@ -124,6 +125,13 @@ export default function AdminDashboard() {
           fetchSession(evId),
           fetchSettings(),
         ]);
+
+        // Recupera tutti gli IP del server (WiFi, LAN, hotspot)
+        try {
+          const info = await apiFetch('/server-info');
+          setServerIPs(info?.localIPs || []);
+        } catch {}
+
       } catch (e) {
         console.error("Admin init error:", e);
       }
@@ -1109,30 +1117,50 @@ export default function AdminDashboard() {
                 <p className="text-neutral font-body-md mb-6">Gestisci stazioni cassa e stampanti. Le modifiche si applicano immediatamente.</p>
               </div>
 
-              {/* Stazioni */}
-              {/* Sezione collegamento casse aggiuntive (metti PRIMA della lista stazioni) */}
-              <div className="card bg-base-200 border border-primary mb-6 p-4 rounded-xl">
-                <div className="card-body">
-                  <h3 className="card-title text-primary font-bold text-lg mb-2">🔗 Collega Casse Aggiuntive</h3>
-                  <p className="text-sm">Apri questo indirizzo su ogni computer cassa aggiuntiva:</p>
-                  <div className="flex gap-2 items-center mt-2">
-                    <code className="flex-1 bg-surface-container-high p-2 rounded text-sm break-all font-mono border border-outline-variant">
-                      {typeof window !== 'undefined' ? `http://${window.location.hostname}:3000` : '...'}
-                    </code>
-                    <button
-                      className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold shadow-md hover:brightness-110 text-sm"
-                      onClick={() => {
-                        if (typeof window !== 'undefined') {
-                          navigator.clipboard.writeText(`http://${window.location.hostname}:3000`);
-                          alert('Indirizzo copiato!');
-                        }
-                      }}
-                    >
-                      📋 Copia Link
-                    </button>
-                  </div>
-                  <p className="text-xs text-base-content/60 mt-2 text-neutral">⚠️ Tutte le casse devono essere connesse alla stessa rete Wi-Fi o LAN</p>
+              {/* Sezione collegamento casse aggiuntive — mostra TUTTI gli IP disponibili */}
+              <div className="bg-primary-container border border-primary/30 mb-6 p-5 rounded-2xl">
+                <h3 className="text-primary font-bold text-lg mb-1 flex items-center gap-2">
+                  <span className="material-symbols-outlined">wifi</span> Collega Casse Aggiuntive
+                </h3>
+                <p className="text-sm text-on-background/70 mb-3">
+                  Apri uno di questi indirizzi su ogni computer / tablet cassa aggiuntiva.<br/>
+                  <strong>Usa hotspot telefono?</strong> Connetti tutti i dispositivi all&apos;hotspot e usa l&apos;IP che inizia con <code className="text-primary">192.168.x.x</code>.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {serverIPs.length > 0 ? serverIPs.map((ip) => (
+                    <div key={ip} className="flex gap-2 items-center">
+                      <code className="flex-1 bg-surface-container-high p-2 rounded-lg text-sm break-all font-mono border border-outline-variant text-on-background">
+                        http://{ip}:3000
+                      </code>
+                      <button
+                        className="bg-primary text-on-primary px-3 py-2 rounded-lg font-bold shadow-md hover:brightness-110 text-sm flex items-center gap-1"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(`http://${ip}:3000`);
+                          // Feedback visivo senza alert bloccante
+                          const btn = document.getElementById(`copy-btn-${ip.replace(/\./g, '-')}`);
+                          if (btn) { btn.textContent = '✓ Copiato!'; setTimeout(() => { btn.textContent = '📋 Copia'; }, 2000); }
+                        }}
+                      >
+                        <span id={`copy-btn-${ip.replace(/\./g, '-')}`}>📋 Copia</span>
+                      </button>
+                    </div>
+                  )) : (
+                    <div className="flex gap-2 items-center">
+                      <code className="flex-1 bg-surface-container-high p-2 rounded-lg text-sm break-all font-mono border border-outline-variant">
+                        {typeof window !== 'undefined' ? `http://${window.location.hostname}:3000` : '...'}
+                      </code>
+                      <button
+                        className="bg-primary text-on-primary px-3 py-2 rounded-lg font-bold shadow-md hover:brightness-110 text-sm"
+                        onClick={async () => {
+                          if (typeof window !== 'undefined') {
+                            await navigator.clipboard.writeText(`http://${window.location.hostname}:3000`);
+                          }
+                        }}
+                      >📋 Copia</button>
+                    </div>
+                  )}
                 </div>
+                <p className="text-xs text-on-background/50 mt-3">⚠️ Tutte le casse devono essere connesse alla stessa rete (Wi-Fi, LAN o hotspot)</p>
               </div>
 
               <div className="bg-surface-container-lowest border border-outline-variant rounded-3xl p-6 shadow-sm">

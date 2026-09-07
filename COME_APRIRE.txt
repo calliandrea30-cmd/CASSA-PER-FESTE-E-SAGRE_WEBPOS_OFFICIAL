@@ -1,0 +1,37 @@
+====================================================================
+               🏪 SAGRA POS — COME APRIRE IL PROGRAMMA
+====================================================================
+
+Gentile Operatore, per avviare la cassa fai semplicemente:
+
+👉 SE SEI SU UN COMPUTER MAC (Apple):
+   Fai doppio clic su: SagraPOS.app (oppure su SagraPOS.command)
+
+👉 SE SEI SU UN COMPUTER WINDOWS:
+   Fai doppio clic su: SagraPOS.bat
+
+--------------------------------------------------------------------
+COSA FARE QUANDO SI APRE:
+--------------------------------------------------------------------
+1. Ti comparirà una finestra che ti chiede:
+   - Premi 1 se questo computer è la CASSA 1 (Server Principale)
+   - Premi 2 se questo computer è una CASSA AGGIUNTIVA (Secondaria)
+
+2. Se è la CASSA 1 (Server):
+   - Fa tutto da solo e apre subito la cassa nel browser!
+   - Ti mostrerà a schermo un indirizzo (es. http://192.168.1.50:3000)
+     da usare per collegare gli altri computer o smartphone.
+
+3. Se è una CASSA AGGIUNTIVA:
+   - Ti chiederà solo di scrivere l'indirizzo IP mostrato dalla Cassa 1.
+   - Si collegherà all'istante!
+
+--------------------------------------------------------------------
+📱 SE NON C'È IL WI-FI E USI L'HOTSPOT DEL TELEFONO:
+--------------------------------------------------------------------
+- Attiva l'Hotspot sul cellulare.
+- Connetti tutti i computer al Wi-Fi del cellulare.
+- Apri SagraPOS come descritto sopra: funzionerà perfettamente!
+
+Per maggiori dettagli consulta il file LEGGIMI.md
+====================================================================

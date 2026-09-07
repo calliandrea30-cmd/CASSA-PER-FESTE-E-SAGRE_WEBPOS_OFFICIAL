@@ -33,17 +33,28 @@ export default function POS() {
   const [suspendedOrders, setSuspendedOrders] = useState<any[]>([]);
   const [noteModalItem, setNoteModalItem] = useState<any>(null);
   const [customNoteText, setCustomNoteText] = useState("");
-  const [initError, setInitError] = useState<string | null>(null);
+  // Toast non bloccante (sostituisce alert())
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
-  // Checkout states
+  // Modal nome sospeso (sostituisce prompt())
+  const [suspendNameModal, setSuspendNameModal] = useState(false);
+  const [suspendNameText, setSuspendNameText] = useState('');
+  const suspendNameRef = useRef<HTMLInputElement>(null);
+
+  const cart = useCartStore();
+
+  // Stati per errore inizializzazione e checkout
+  const [initError, setInitError] = useState<string | null>(null);
   const [cashReceived, setCashReceived] = useState<string>("");
   const [fixedDiscount, setFixedDiscount] = useState<string>("");
   const [percentDiscount, setPercentDiscount] = useState<string>("");
   const [freeItems, setFreeItems] = useState<Set<string>>(new Set());
 
-  const cart = useCartStore();
 
-  // Ref per eventId sempre aggiornato (fix closure stale nei listener socket)
   const eventIdRef = useRef<string | null>(null);
   const stationIdRef = useRef<string | null>(null);
   useEffect(() => { eventIdRef.current = eventId; }, [eventId]);
@@ -73,9 +84,14 @@ export default function POS() {
 
   const fetchSuspended = useCallback(async () => {
     const evId = eventIdRef.current;
+    const stId = stationIdRef.current;
     if (!evId) return;
     try {
-      const data = await apiFetch(`/orders/suspended?eventId=${evId}`);
+      // Filtriamo per stationId: ogni cassa vede solo i propri sospesi
+      const query = stId
+        ? `/orders/suspended?eventId=${evId}&stationId=${stId}`
+        : `/orders/suspended?eventId=${evId}`;
+      const data = await apiFetch(query);
       setSuspendedOrders(data);
     } catch {}
   }, []);
@@ -221,10 +237,18 @@ export default function POS() {
   };
 
   // ── Sospendi ordine ────────────────────────────────────────────────────────
-  const saveSuspended = async () => {
+  const saveSuspended = () => {
     if (cart.items.length === 0 || !eventId || !stationId) return;
-    const name = prompt("Inserisci Nome o Numero Tavolo per questo Sospeso:");
-    if (!name) return;
+    // Apri il modal per inserire il nome tavolo (sostituisce prompt())
+    setSuspendNameText(customerName || '');
+    setSuspendNameModal(true);
+    setTimeout(() => suspendNameRef.current?.focus(), 100);
+  };
+
+  const confirmSaveSuspended = async () => {
+    const name = suspendNameText.trim() || 'Tavolo';
+    setSuspendNameModal(false);
+    setSuspendNameText('');
 
     try {
       const users = await apiFetch(`/users?eventId=${eventId}`);
@@ -251,8 +275,9 @@ export default function POS() {
       cart.clearCart();
       setCustomerName("");
       await fetchSuspended();
+      showToast(`Ordine "${name}" sospeso ✓`, 'success');
     } catch (e: any) {
-      alert(`Errore salvataggio sospeso: ${e?.message || "Errore sconosciuto"}`);
+      showToast(`Errore salvataggio sospeso: ${e?.message || "Errore di rete"}`, 'error');
     }
   };
 
@@ -293,7 +318,7 @@ export default function POS() {
         return;
       }
 
-      await apiFetch("/orders", {
+      const orderResult = await apiFetch("/orders", {
         method: "POST",
         body: JSON.stringify({
           eventId,
@@ -302,13 +327,39 @@ export default function POS() {
           paymentType,
           customerName: customerName || "Asporto / Generico",
           discount: totalDiscounts,
-          items: cart.items.map(i => ({
-            productId: i.product.id,
-            variantId: i.variant?.id,
-            variantName: i.variant?.name,
-            quantity: i.quantity,
-            price: freeItems.has(i.id) ? 0 : i.product.price + (i.variant?.priceDelta || 0),
-          })),
+          items: cart.items.map(i => {
+            const fullVariantName = i.variant?.name ?? '';
+            const noteDelimiter = ' - ';
+            const delimiterIdx = fullVariantName.indexOf(noteDelimiter);
+            const isNoteOnly = i.variant?.id === 'note';
+
+            let variantId: string | undefined;
+            let variantName: string | undefined;
+            let note: string | undefined;
+
+            if (isNoteOnly) {
+              variantId = undefined;
+              variantName = undefined;
+              note = fullVariantName;
+            } else if (delimiterIdx !== -1) {
+              variantId = i.variant?.id;
+              variantName = fullVariantName.substring(0, delimiterIdx);
+              note = fullVariantName.substring(delimiterIdx + noteDelimiter.length);
+            } else {
+              variantId = i.variant?.id;
+              variantName = fullVariantName || undefined;
+              note = undefined;
+            }
+
+            return {
+              productId: i.product.id,
+              variantId,
+              variantName,
+              note,
+              quantity: i.quantity,
+              price: freeItems.has(i.id) ? 0 : i.product.price + (i.variant?.priceDelta || 0),
+            };
+          }),
         }),
       });
 
@@ -316,8 +367,10 @@ export default function POS() {
       resetCheckout();
       setCustomerName("");
       await fetchSuspended();
+      // Toast di conferma pagamento (sostituisce alert bloccante)
+      showToast(`✓ Pagamento registrato! Ordine #${orderResult?.orderNumber ?? ''}`, 'success');
     } catch (e: any) {
-      alert(`Errore durante il checkout: ${e?.message || "Errore di rete"}`);
+      showToast(`Errore checkout: ${e?.message || "Errore di rete"}`, 'error');
     } finally {
       setCheckoutLoading(false);
     }
@@ -867,6 +920,55 @@ export default function POS() {
           </button>
         </div>
       </aside>
+
+      {/* ── Toast non bloccante ── */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-xl shadow-2xl font-bold text-sm flex items-center gap-2 transition-all duration-300 ${
+            toast.type === 'success' ? 'bg-success text-white' :
+            toast.type === 'error' ? 'bg-error text-white' :
+            'bg-surface-container-highest text-on-background border border-outline-variant'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {toast.type === 'success' ? 'check_circle' : toast.type === 'error' ? 'error' : 'info'}
+          </span>
+          {toast.message}
+        </div>
+      )}
+
+      {/* ── Modal nome sospeso (sostituisce prompt()) ── */}
+      {suspendNameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-6 shadow-2xl w-[380px] flex flex-col gap-4">
+            <h3 className="font-black text-lg text-on-background">Sospendi Ordine</h3>
+            <p className="text-sm text-neutral">Inserisci un nome per identificare questo tavolo / cliente:</p>
+            <input
+              ref={suspendNameRef}
+              type="text"
+              value={suspendNameText}
+              onChange={e => setSuspendNameText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmSaveSuspended(); if (e.key === 'Escape') setSuspendNameModal(false); }}
+              placeholder="Es: Tavolo 5, Mario Rossi..."
+              className="w-full bg-surface-container-high border border-outline-variant rounded-xl px-4 py-3 text-on-background font-bold focus:outline-none focus:border-primary"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setSuspendNameModal(false)}
+                className="px-4 py-2 rounded-xl font-bold text-neutral hover:bg-surface-container-high transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={confirmSaveSuspended}
+                className="px-6 py-2 bg-primary text-on-primary rounded-xl font-bold shadow-md hover:brightness-110 transition-all"
+              >
+                Sospendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

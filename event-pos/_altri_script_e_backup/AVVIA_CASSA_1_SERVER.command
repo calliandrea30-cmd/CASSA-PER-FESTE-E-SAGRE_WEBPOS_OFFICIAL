@@ -1,7 +1,7 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║            SAGRA POS — AVVIA CASSA 1 (SERVER MASTER)                    ║
-# ║            macOS / Linux  ·  chmod +x && ./AVVIA_CASSA_1_SERVER.sh      ║
+# ║            macOS .command — doppio clic per avviare                      ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 # ── Spostati nella directory del progetto ─────────────────────────────────────
@@ -37,15 +37,14 @@ log_step()  { echo ""; echo "─────────────────
 # ── 0. Verifica Node.js ───────────────────────────────────────────────────────
 log_step "Verifica requisiti di sistema"
 if ! command -v node &>/dev/null; then
-  log_err "Node.js non trovato. Scaricalo da: https://nodejs.org"
+  # Su macOS, Node potrebbe essere in /usr/local/bin o ~/.nvm
+  export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/$(ls ~/.nvm/versions/node 2>/dev/null | sort -V | tail -1)/bin:$PATH"
+fi
+if ! command -v node &>/dev/null; then
+  osascript -e 'display alert "Node.js non trovato" message "Installa Node.js da https://nodejs.org e riprova." as critical'
   exit 1
 fi
 log_ok "Node.js $(node --version) trovato"
-
-if ! command -v npm &>/dev/null; then
-  log_err "npm non trovato. Reinstalla Node.js da: https://nodejs.org"
-  exit 1
-fi
 
 # ── 1. Individua IP locale ────────────────────────────────────────────────────
 log_step "Rilevamento indirizzo IP"
@@ -184,7 +183,6 @@ for i in $(seq 1 30); do
     API_READY=1
     break
   fi
-  # Verifica che il processo API sia ancora vivo
   if ! kill -0 "$API_PID" 2>/dev/null; then
     log_err "Il processo API si è fermato inaspettatamente."
     log_info "Controlla che apps/api/dist/index.js esista e riprova."
@@ -203,7 +201,7 @@ fi
 # ── 11. Avvia Web App ─────────────────────────────────────────────────────────
 log_step "Avvio Web App (porta 3000)"
 cd "$PROJECT_ROOT/apps/web"
-npx next start -p 3000 &
+npx next start -p 3000 -H 0.0.0.0 &
 WEB_PID=$!
 cd "$PROJECT_ROOT"
 log_ok "Web App avviata (PID: $WEB_PID)"
@@ -245,22 +243,15 @@ fi
 
 # ── 13. Attendi porta 3000 e apri browser ────────────────────────────────────
 log_step "Apertura browser"
-WEB_READY=0
 for i in $(seq 1 30); do
   if curl -sf "http://127.0.0.1:3000" >/dev/null 2>&1; then
-    WEB_READY=1
     break
   fi
   printf "   Attendo porta 3000... (%d/30)\r" "$i"
   sleep 1
 done
 echo ""
-
-if command -v open &>/dev/null; then
-  open "http://localhost:3000"
-elif command -v xdg-open &>/dev/null; then
-  xdg-open "http://localhost:3000"
-fi
+open "http://localhost:3000"
 
 # ── 14. Riepilogo finale ──────────────────────────────────────────────────────
 echo ""
@@ -275,7 +266,7 @@ echo "╠═══════════════════════�
 printf  "║  📡 Altre casse: http://%-29s║\n" "$SERVER_IP:3000"
 echo "╠══════════════════════════════════════════════════════╣"
 echo "║  ⚠️  NON CHIUDERE QUESTA FINESTRA DURANTE IL SERVIZIO ║"
-echo "║  👉 Premi Ctrl+C per fermare tutto a fine serata.    ║"
+echo "║  👉 Chiudi questa finestra per fermare tutto.        ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 

@@ -147,10 +147,19 @@
     setDot('dotWeb',   s.web || !isServer);
     setDot('dotAgent', s.agent);
 
-    // Network info
+    // Network info — mostra TUTTI gli IP (hotspot, WiFi, LAN)
     if (s.localIPs && s.localIPs.length > 0 && isServer) {
-      const url = `http://${s.localIPs[0]}:3000`;
-      document.getElementById('netUrl').textContent = url;
+      const netUrl = document.getElementById('netUrl');
+      netUrl.innerHTML = '';
+      s.localIPs.forEach(ip => {
+        const url = `http://${ip}:3000`;
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+        div.innerHTML = `<span style="font-size:11px;opacity:0.6;">${ip.startsWith('192.168') ? '📱 Hotspot/WiFi' : '🌐 LAN'}</span>
+          <code style="flex:1;">${url}</code>
+          <button onclick="navigator.clipboard.writeText('${url}')" style="background:#4ade80;border:none;color:#000;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">📋</button>`;
+        netUrl.appendChild(div);
+      });
     }
 
     // Abilita pulsante cassa

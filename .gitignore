@@ -17,10 +17,12 @@ dist/
 dist-app/
 */dist-app/
 *.tsbuildinfo
-bin/print-agent*
-*/bin/print-agent*
+**/bin/print-agent*
 *.exe
 
+# Preserve custom icons in build/
+!build/icon.*
+!**/build/icon.*
 
 # SQLite databases & runtime data
 *.db
