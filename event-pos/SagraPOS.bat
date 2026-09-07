@@ -160,6 +160,21 @@ popd
 echo [OK] Print Agent compilato!
 
 REM ----------------------------------------------------------------------------
+REM 5b. Compilazione Spooler di Stampa Nativo Ultraveloce (raw-print.exe)
+REM ----------------------------------------------------------------------------
+if not exist "%PROJECT_ROOT%apps\print-agent\bin" mkdir "%PROJECT_ROOT%apps\print-agent\bin"
+if not exist "%PROJECT_ROOT%apps\print-agent\bin\raw-print.exe" (
+    set "CSC_EXE="
+    if exist "%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" set "CSC_EXE=%SystemRoot%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+    if not defined CSC_EXE if exist "%SystemRoot%\Microsoft.NET\Framework\v4.0.30319\csc.exe" set "CSC_EXE=%SystemRoot%\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+    if defined CSC_EXE (
+        echo [INFO] Compilazione Spooler Nativo raw-print.exe per stampa istantanea...
+        "!CSC_EXE!" /nologo /optimize+ /out:"%PROJECT_ROOT%apps\print-agent\bin\raw-print.exe" "%PROJECT_ROOT%apps\print-agent\scripts\RawPrint.cs" >nul 2>&1
+        if exist "%PROJECT_ROOT%apps\print-agent\bin\raw-print.exe" echo [OK] Spooler Nativo raw-print.exe pronto per stampa a zero latenza!
+    )
+)
+
+REM ----------------------------------------------------------------------------
 REM 6. Compilazione Web App Next.js se non presente
 REM ----------------------------------------------------------------------------
 if exist "%PROJECT_ROOT%apps\web\.next\" goto :SKIP_WEB_BUILD

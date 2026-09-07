@@ -10,52 +10,25 @@ if (-not $FilePath -or -not (Test-Path $FilePath)) {
     exit 1
 }
 
-# 1. Elenco stampanti installate nel sistema Windows
-$allPrinters = @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name)
-
-# 2. Funzione per recuperare la vera stampante predefinita dell'utente su Windows 10/11
-function Get-WindowsDefaultPrinter {
+# Se il nome della stampante non e fornito, recupera velocemente la predefinita di Windows
+if (-not $PrinterName -or $PrinterName.Trim() -eq "") {
     try {
         $regVal = (Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows' -ErrorAction SilentlyContinue).Device
-        if ($regVal) {
-            $name = $regVal.Split(',')[0].Trim()
-            if ($name -and ($allPrinters -contains $name)) { return $name }
-        }
+        if ($regVal) { $PrinterName = $regVal.Split(',')[0].Trim() }
     } catch {}
 
-    try {
-        $cimDef = Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1
-        if ($cimDef -and $cimDef.Name) { return $cimDef.Name }
-    } catch {}
+    if (-not $PrinterName) {
+        try {
+            $cimDef = Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1
+            if ($cimDef -and $cimDef.Name) { $PrinterName = $cimDef.Name }
+        } catch {}
+    }
 
-    try {
-        $wmiDef = Get-WmiObject -Query "SELECT Name FROM Win32_Printer WHERE Default = True" | Select-Object -First 1
-        if ($wmiDef -and $wmiDef.Name) { return $wmiDef.Name }
-    } catch {}
-
-    return $null
-}
-
-# 3. Risoluzione della stampante target:
-# Se il nome passato esiste già tra le stampanti installate, lo usiamo direttamente!
-if ($PrinterName -and ($allPrinters -contains $PrinterName)) {
-    # Nome valido e presente tra le stampanti di Windows: usa direttamente
-} else {
-    # Altrimenti cerchiamo:
-    # A. La stampante predefinita di Windows
-    $defP = Get-WindowsDefaultPrinter
-    if ($defP) {
-        $PrinterName = $defP
-    } else {
-        # B. Una stampante POS/termica riconosciuta dal nome
-        $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin" } | Select-Object -First 1
-        if ($pPos) {
-            $PrinterName = $pPos.Name
-        } else {
-            # C. La prima stampante disponibile nel sistema
-            $pAny = Get-CimInstance Win32_Printer | Select-Object -First 1
-            if ($pAny) { $PrinterName = $pAny.Name }
-        }
+    if (-not $PrinterName) {
+        try {
+            $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin" } | Select-Object -First 1
+            if ($pPos) { $PrinterName = $pPos.Name }
+        } catch {}
     }
 }
 
@@ -64,7 +37,7 @@ if (-not $PrinterName) {
     exit 1
 }
 
-# 4. Helper Win32 Spooler ad altissime prestazioni e compatibilità Unicode
+# Helper Win32 Spooler ad altissime prestazioni e compatibilita Unicode
 $csharpSource = @"
 using System;
 using System.IO;

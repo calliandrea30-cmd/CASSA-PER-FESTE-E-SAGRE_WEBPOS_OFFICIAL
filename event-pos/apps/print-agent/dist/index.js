@@ -87,6 +87,14 @@ catch (e) {
     console.warn('[Config] Errore lettura config.json:', e);
 }
 console.log(`[Boot] Print Agent (${config.AGENT_ID}) avviato. Server: ${config.SERVER_URL}`);
+// Pre-risoluzione e cache della stampante all'avvio per azzerare la latenza di stampa
+setTimeout(() => {
+    try {
+        const def = getCachedDefaultPrinter();
+        console.log(`[Boot] Stampante di sistema pronta in memoria: "${def || 'default'}"`);
+    }
+    catch { }
+}, 300);
 // ─── Health-check HTTP locale (porta 3002) ─────────────────────────────────────
 // Consente al launcher Electron di verificare che l'agent sia attivo
 // Usa una variabile che verrà impostata dopo la dichiarazione del socket
@@ -305,17 +313,37 @@ function findAnyUSBPrinter() {
     }
     return null;
 }
+let cachedPrinters = null;
+let lastCachePrintersTime = 0;
+let cachedDefaultPrinter = null;
+let lastCacheDefTime = 0;
+const CACHE_TTL_MS = 30000;
 /** Enumera tutte le stampanti installate nel sistema operativo (macOS o Windows) */
 function getAvailableSystemPrinters() {
     const isWin = process.platform === 'win32';
     try {
         if (isWin) {
+            // 1. Prova prima con reg query nativo Windows (~10ms)
+            try {
+                const regOut = (0, child_process_1.execSync)('reg query "HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Devices"', { encoding: 'utf8', timeout: 1000 });
+                const lines = regOut.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                const list = [];
+                for (const l of lines) {
+                    const match = l.match(/^([^\s].*?)\s+REG_SZ\s+/);
+                    if (match && match[1])
+                        list.push(match[1].trim());
+                }
+                if (list.length > 0)
+                    return list;
+            }
+            catch { }
+            // 2. Fallback PowerShell se il registro non risponde
             const cmd = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer).Name"';
             const out = (0, child_process_1.execSync)(cmd, { encoding: 'utf8', timeout: 3000 });
             return out.split(/\r?\n/).map(p => p.trim()).filter(Boolean);
         }
         else {
-            const out = (0, child_process_1.execSync)('lpstat -e 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+            const out = (0, child_process_1.execSync)('lpstat -e 2>/dev/null || true', { encoding: 'utf8', timeout: 2000 });
             return out.split(/\r?\n/).map(p => p.trim()).filter(Boolean);
         }
     }
@@ -323,58 +351,73 @@ function getAvailableSystemPrinters() {
         return [];
     }
 }
+function getCachedPrinters() {
+    const now = Date.now();
+    if (cachedPrinters && (now - lastCachePrintersTime < CACHE_TTL_MS)) {
+        return cachedPrinters;
+    }
+    cachedPrinters = getAvailableSystemPrinters();
+    lastCachePrintersTime = now;
+    return cachedPrinters;
+}
 /** Rileva la migliore stampante termica POS o la predefinita di sistema */
 function getDefaultSystemPrinter() {
-    const printers = getAvailableSystemPrinters();
-    if (printers.length === 0)
-        return null;
     const isWin = process.platform === 'win32';
     // 1. Cerca PRIMA la stampante predefinita di default configurata dall'utente nel sistema operativo
     try {
         if (isWin) {
-            // Su Windows 10/11 la chiave di registro HKCU contiene la stampante predefinita dell'utente
-            const cmdDefReg = 'powershell -NoProfile -Command "(Get-ItemProperty -Path \'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows\' -ErrorAction SilentlyContinue).Device"';
-            const outReg = (0, child_process_1.execSync)(cmdDefReg, { encoding: 'utf8', timeout: 3000 }).trim();
-            if (outReg) {
-                const defName = outReg.split(',')[0].trim();
-                if (defName && printers.includes(defName))
-                    return defName;
+            // Su Windows 10/11 reg query è istantaneo (~10ms)
+            try {
+                const regOut = (0, child_process_1.execSync)('reg query "HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows" /v Device', { encoding: 'utf8', timeout: 1000 });
+                const match = regOut.match(/Device\s+REG_SZ\s+([^,\r\n]+)/i);
+                if (match && match[1]) {
+                    return match[1].trim();
+                }
             }
-            // Fallback WMI se registro non disponibile
+            catch { }
+            // Fallback PowerShell
             const cmdDefCim = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1).Name"';
             const outDefCim = (0, child_process_1.execSync)(cmdDefCim, { encoding: 'utf8', timeout: 3000 }).trim();
-            if (outDefCim && printers.includes(outDefCim))
+            if (outDefCim)
                 return outDefCim;
         }
         else {
-            const dOut = (0, child_process_1.execSync)('lpstat -d 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
+            const dOut = (0, child_process_1.execSync)('lpstat -d 2>/dev/null || true', { encoding: 'utf8', timeout: 2000 });
             const dMatch = dOut.match(/:\s*([^\r\n]+)/);
             if (dMatch && dMatch[1] && !dMatch[1].toLowerCase().includes('nessuna') && !dMatch[1].toLowerCase().includes('no default')) {
-                const def = dMatch[1].trim();
-                if (printers.includes(def))
-                    return def;
+                return dMatch[1].trim();
             }
         }
     }
     catch { }
+    const printers = getCachedPrinters();
     // 2. Se non impostata una predefinita, cerca una stampante POS / termica per nome
     const posPrinter = printers.find(p => /POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin/i.test(p));
     if (posPrinter)
         return posPrinter;
     // 3. Fallback sulla prima stampante installata
-    return printers[0];
+    return printers[0] || null;
+}
+function getCachedDefaultPrinter() {
+    const now = Date.now();
+    if (cachedDefaultPrinter && (now - lastCacheDefTime < CACHE_TTL_MS)) {
+        return cachedDefaultPrinter;
+    }
+    cachedDefaultPrinter = getDefaultSystemPrinter();
+    lastCacheDefTime = now;
+    return cachedDefaultPrinter;
 }
 /** Adapter che invia byte ESC/POS RAW direttamente alla stampante predefinita di sistema */
 class SystemDefaultPrinterAdapter {
     buffer = [];
     printerName;
     constructor(printerName) {
-        this.printerName = printerName || getDefaultSystemPrinter();
+        this.printerName = printerName || getCachedDefaultPrinter();
     }
     open(callback) {
         this.buffer = [];
         if (!this.printerName) {
-            this.printerName = getDefaultSystemPrinter();
+            this.printerName = getCachedDefaultPrinter();
         }
         console.log(`[Default Printer] In ascolto su stampante di sistema: "${this.printerName || 'default'}"`);
         callback(null);
@@ -399,23 +442,44 @@ class SystemDefaultPrinterAdapter {
         try {
             fs_1.default.writeFileSync(tmpFile, fullBuffer);
             if (isWin) {
-                // Su Windows usiamo lo script Win32 Spooler RAW per stampare fedelmente su qualsiasi stampante termica
-                const candidates = [
-                    path_1.default.join(__dirname, '../scripts/raw-print.ps1'),
-                    path_1.default.join(__dirname, 'scripts/raw-print.ps1'),
-                    path_1.default.join(process.cwd(), 'apps/print-agent/scripts/raw-print.ps1'),
-                    path_1.default.join(process.cwd(), 'scripts/raw-print.ps1'),
+                const targetP = this.printerName || getCachedDefaultPrinter() || '';
+                // 1. Tenta prima con l'utility nativa compilata raw-print.exe (TEMPO DI ESECUZIONE: ~15ms!)
+                const exeCandidates = [
+                    path_1.default.join(__dirname, '../bin/raw-print.exe'),
+                    path_1.default.join(__dirname, 'bin/raw-print.exe'),
+                    path_1.default.join(process.cwd(), 'apps/print-agent/bin/raw-print.exe'),
+                    path_1.default.join(process.cwd(), 'bin/raw-print.exe'),
                 ];
-                const psScript = candidates.find(p => fs_1.default.existsSync(p)) || candidates[0];
-                const pArg = this.printerName ? `-PrinterName "${this.printerName}"` : '';
-                const psCmd = `powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}" ${pArg} -FilePath "${tmpFile}"`;
-                (0, child_process_1.execSync)(psCmd, { timeout: 10000 });
+                const rawExe = exeCandidates.find(p => fs_1.default.existsSync(p));
+                let printed = false;
+                if (rawExe && targetP) {
+                    try {
+                        (0, child_process_1.execSync)(`"${rawExe}" "${targetP}" "${tmpFile}"`, { timeout: 4000 });
+                        printed = true;
+                    }
+                    catch (e) {
+                        console.warn('[RawPrint.exe] Esecuzione fallita, fallback su script PowerShell:', e.message);
+                    }
+                }
+                // 2. Fallback su raw-print.ps1 se l'eseguibile non e presente o fallisce
+                if (!printed) {
+                    const candidates = [
+                        path_1.default.join(__dirname, '../scripts/raw-print.ps1'),
+                        path_1.default.join(__dirname, 'scripts/raw-print.ps1'),
+                        path_1.default.join(process.cwd(), 'apps/print-agent/scripts/raw-print.ps1'),
+                        path_1.default.join(process.cwd(), 'scripts/raw-print.ps1'),
+                    ];
+                    const psScript = candidates.find(p => fs_1.default.existsSync(p)) || candidates[0];
+                    const pArg = targetP ? `-PrinterName "${targetP}"` : '';
+                    const psCmd = `powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}" ${pArg} -FilePath "${tmpFile}"`;
+                    (0, child_process_1.execSync)(psCmd, { timeout: 8000 });
+                }
             }
             else {
                 // macOS / Linux CUPS
-                const available = getAvailableSystemPrinters();
+                const available = getCachedPrinters();
                 const isRealPrinter = Boolean(this.printerName && available.includes(this.printerName));
-                const target = isRealPrinter ? this.printerName : getDefaultSystemPrinter();
+                const target = isRealPrinter ? this.printerName : getCachedDefaultPrinter();
                 if (target) {
                     // Riabilita la coda di stampa se temporaneamente in pausa
                     try {
@@ -460,9 +524,8 @@ function openPrinterDevice(pc) {
         const adapter = new NetworkPrinterAdapter(pc.networkHost, pc.networkPort || 9100);
         return { device: adapter, isNetwork: true };
     }
-    // 2. Se su macOS o Windows è presente una stampante termica/POS o di sistema (es. Printer_POS_80)
-    // Usiamo prioritariamente l'adapter di sistema: è affidabile al 100%, non si disconnette e non confligge con i driver USB dell'OS
-    const availablePrinters = getAvailableSystemPrinters();
+    // 2. Se su macOS o Windows e presente una stampante termica/POS o di sistema (es. POS-80)
+    const availablePrinters = getCachedPrinters();
     const isGenericDummy = !pc?.name ||
         ['stampante', 'predefinita', 'sistema', 'default', 'cassa', 'pos'].includes(pc.name.trim().toLowerCase());
     let targetPrinter = null;
@@ -470,7 +533,7 @@ function openPrinterDevice(pc) {
         targetPrinter = pc.name;
     }
     else {
-        targetPrinter = getDefaultSystemPrinter();
+        targetPrinter = getCachedDefaultPrinter();
     }
     if (targetPrinter) {
         console.log(`[Auto-Detect] Stampante di sistema attiva selezionata: "${targetPrinter}"`);
