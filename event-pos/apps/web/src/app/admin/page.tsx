@@ -1345,7 +1345,13 @@ export default function AdminDashboard() {
                         ) : (
                           <div className="text-center font-bold text-[11px] text-blue-900">{settings.headerName || "CAVAGLIO SOTTO LE STELLE"}</div>
                         )}
-                        <div className="text-center text-[8px] text-neutral uppercase font-sans mb-2">AREA FESTE · CAVAGLIO D&apos;AGOGNA</div>
+                        <div className="text-center text-[8px] text-neutral uppercase font-sans mb-2 leading-tight">
+                          {settings.headerSubtitle ? (
+                            settings.headerSubtitle.split('\n').map((l, idx) => <div key={idx}>{l}</div>)
+                          ) : (
+                            <div>AREA FESTE · CAVAGLIO D&apos;AGOGNA</div>
+                          )}
+                        </div>
                         <div className="border-b border-black/40 mb-2" />
                       </>
                     )}
@@ -1356,6 +1362,13 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="border-b border-black/40 my-2" />
+
+                    <div className="flex justify-between items-center text-[9px] font-sans text-neutral/80 uppercase mb-2">
+                      <span>ORD. #0047  21:48</span>
+                      <span>TAVOLO 12</span>
+                    </div>
+
+                    <div className="border-b border-black/40 mb-2" />
 
                     <div className="text-center font-bold text-[12px] font-sans text-primary my-1">
                       {settings.comandaGreeting || "Buona Sagra! ★"}

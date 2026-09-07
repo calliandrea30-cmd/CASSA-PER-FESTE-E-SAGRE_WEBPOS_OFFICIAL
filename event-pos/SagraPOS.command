@@ -57,20 +57,20 @@ if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
   log_ok "Componenti installati con successo!"
 fi
 
-# ── 3. Compilazione automatica componenti se non compilati ───────────────────
-if [ ! -d "$PROJECT_ROOT/apps/api/dist" ]; then
+# ── 3. Compilazione automatica componenti se non compilati o aggiornati ────────
+if [ ! -d "$PROJECT_ROOT/apps/api/dist" ] || [ "$PROJECT_ROOT/apps/api/src/index.ts" -nt "$PROJECT_ROOT/apps/api/dist/index.js" ]; then
   log_step "Compilazione API Server..."
   cd "$PROJECT_ROOT/apps/api" && npx tsc && cd "$PROJECT_ROOT"
   log_ok "API compilata!"
 fi
 
-if [ ! -d "$PROJECT_ROOT/apps/web/.next" ]; then
+if [ ! -d "$PROJECT_ROOT/apps/web/.next" ] || [ "$PROJECT_ROOT/apps/web/src/app/admin/page.tsx" -nt "$PROJECT_ROOT/apps/web/.next" ]; then
   log_step "Compilazione Interfaccia Web..."
   cd "$PROJECT_ROOT/apps/web" && npx next build && cd "$PROJECT_ROOT"
   log_ok "Interfaccia Web compilata!"
 fi
 
-if [ ! -d "$PROJECT_ROOT/apps/print-agent/dist" ]; then
+if [ ! -d "$PROJECT_ROOT/apps/print-agent/dist" ] || [ "$PROJECT_ROOT/apps/print-agent/src/index.ts" -nt "$PROJECT_ROOT/apps/print-agent/dist/index.js" ]; then
   log_step "Compilazione Print Agent stampante..."
   cd "$PROJECT_ROOT/apps/print-agent" && npx tsc && cd "$PROJECT_ROOT"
   log_ok "Print Agent compilato!"
