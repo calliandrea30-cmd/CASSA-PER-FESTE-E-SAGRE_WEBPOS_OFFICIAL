@@ -321,17 +321,22 @@ function getDefaultSystemPrinter(): string | null {
   const printers = getAvailableSystemPrinters();
   if (printers.length === 0) return null;
 
-  // 1. Cerca prioritariamente una stampante POS / termica (es. Printer_POS_80, POS-80, XP-80, Thermal)
-  const posPrinter = printers.find(p => /POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin/i.test(p));
-  if (posPrinter) return posPrinter;
-
-  // 2. Cerca la stampante predefinita di default del sistema operativo
   const isWin = process.platform === 'win32';
+
+  // 1. Cerca PRIMA la stampante predefinita di default configurata dall'utente nel sistema operativo
   try {
     if (isWin) {
-      const cmdDef = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object Default | Select-Object -First 1).Name"';
-      const outDef = execSync(cmdDef, { encoding: 'utf8', timeout: 3000 }).trim();
-      if (outDef && printers.includes(outDef)) return outDef;
+      // Su Windows 10/11 la chiave di registro HKCU contiene la stampante predefinita dell'utente
+      const cmdDefReg = 'powershell -NoProfile -Command "(Get-ItemProperty -Path \'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows\' -ErrorAction SilentlyContinue).Device"';
+      const outReg = execSync(cmdDefReg, { encoding: 'utf8', timeout: 3000 }).trim();
+      if (outReg) {
+        const defName = outReg.split(',')[0].trim();
+        if (defName && printers.includes(defName)) return defName;
+      }
+      // Fallback WMI se registro non disponibile
+      const cmdDefCim = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1).Name"';
+      const outDefCim = execSync(cmdDefCim, { encoding: 'utf8', timeout: 3000 }).trim();
+      if (outDefCim && printers.includes(outDefCim)) return outDefCim;
     } else {
       const dOut = execSync('lpstat -d 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
       const dMatch = dOut.match(/:\s*([^\r\n]+)/);
@@ -341,6 +346,10 @@ function getDefaultSystemPrinter(): string | null {
       }
     }
   } catch {}
+
+  // 2. Se non impostata una predefinita, cerca una stampante POS / termica per nome
+  const posPrinter = printers.find(p => /POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin/i.test(p));
+  if (posPrinter) return posPrinter;
 
   // 3. Fallback sulla prima stampante installata
   return printers[0];
@@ -590,7 +599,7 @@ const DEFAULT_SETTINGS = {
   headerSize: 'NORMAL',
   headerLogoBase64: '',
   footerLogoBase64: '',
-  bodyFont: 'b', // 'b' = carattere compatto salva-carta (default consigliato)
+  bodyFont: 'a', // 'a' = Font standard universale 12x24 (compatibile 100% con tutte le stampanti POS-80/58)
   showOriginalPrice: true,
   showChangeAndDiscount: true,
   dateFormat: 'SHORT',
@@ -671,10 +680,10 @@ function printScontrino(printer: any, payload: any, settings: any) {
   // ESC M 1 : Font B compatto ed elegante (salva 50% di carta)
   // ESC a 1 : Allineamento centrato hardware
   printer.pureText('\x1B\x40\x1B\x21\x00');
-  if (settings.bodyFont === 'a') {
-    printer.pureText('\x1B\x4D\x00'); // Font A
+  if (settings.bodyFont === 'b') {
+    printer.pureText('\x1B\x4D\x01'); // Font B compatto se specificato
   } else {
-    printer.pureText('\x1B\x4D\x01'); // Font B compatto salva-carta
+    printer.pureText('\x1B\x4D\x00'); // Font A standard universale (100% compatibile)
   }
   printer.style('normal').align('ct');
 

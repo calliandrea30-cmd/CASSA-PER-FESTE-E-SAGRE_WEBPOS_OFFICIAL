@@ -37,10 +37,28 @@ REM ----------------------------------------------------------------------------
 taskkill /FI "WINDOWTITLE eq SagraPOS_API_Service*" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq SagraPOS_Web_Service*" /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq SagraPOS_Print_Service*" /T /F >nul 2>&1
+taskkill /FI "WINDOWTITLE eq SagraPOS Print Agent*" /T /F >nul 2>&1
 
-REM Liberazione preventiva porte 3000 e 3001 su Windows
+REM Liberazione preventiva porte 3000, 3001 e 3002 su Windows
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000.*LISTENING" 2^>nul') do taskkill /f /pid %%a >nul 2>&1
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3001.*LISTENING" 2^>nul') do taskkill /f /pid %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3002.*LISTENING" 2^>nul') do taskkill /f /pid %%a >nul 2>&1
+
+REM Controllo aggiornamenti da GitHub se presente git
+where git >nul 2>&1
+if not errorlevel 1 (
+    if exist "%PROJECT_ROOT%.git" (
+        echo [INFO] Controllo aggiornamenti da GitHub...
+        pushd "%PROJECT_ROOT%"
+        git pull origin main --quiet >nul 2>&1
+        popd
+    ) else if exist "%SCRIPT_DIR%.git" (
+        echo [INFO] Controllo aggiornamenti da GitHub...
+        pushd "%SCRIPT_DIR%"
+        git pull origin main --quiet >nul 2>&1
+        popd
+    )
+)
 
 echo ============================================================================
 echo                      SAGRA POS - AVVIO SISTEMA
@@ -129,9 +147,8 @@ echo [OK] API Server compilato!
 :SKIP_API_BUILD
 
 REM ----------------------------------------------------------------------------
-REM 5. Compilazione Print Agent se non presente
+REM 5. Compilazione Print Agent
 REM ----------------------------------------------------------------------------
-if exist "%PROJECT_ROOT%apps\print-agent\dist\index.js" goto :SKIP_PRINT_BUILD
 echo [INFO] Compilazione Print Agent...
 pushd "%PROJECT_ROOT%apps\print-agent"
 cmd /c npx tsc
@@ -141,7 +158,6 @@ if errorlevel 1 (
 )
 popd
 echo [OK] Print Agent compilato!
-:SKIP_PRINT_BUILD
 
 REM ----------------------------------------------------------------------------
 REM 6. Compilazione Web App Next.js se non presente

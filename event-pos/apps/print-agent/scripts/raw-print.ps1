@@ -10,24 +10,49 @@ if (-not $FilePath -or -not (Test-Path $FilePath)) {
     exit 1
 }
 
-# Elenco stampanti installate su Windows
+# 1. Elenco stampanti installate nel sistema Windows
 $allPrinters = @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name)
 
-# Se il nome della stampante non e fornito, e generico o non esiste tra quelle installate, cerca la migliore
-$isDummy = (-not $PrinterName) -or ($PrinterName.Trim() -eq "") -or ($PrinterName -match "Predefinita|Sistema|default|Stampante|Cassa|POS") -or ($allPrinters -notcontains $PrinterName)
+# 2. Funzione per recuperare la vera stampante predefinita dell'utente su Windows 10/11
+function Get-WindowsDefaultPrinter {
+    try {
+        $regVal = (Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Windows' -ErrorAction SilentlyContinue).Device
+        if ($regVal) {
+            $name = $regVal.Split(',')[0].Trim()
+            if ($name -and ($allPrinters -contains $name)) { return $name }
+        }
+    } catch {}
 
-if ($isDummy) {
-    # 1. Cerca prioritariamente una stampante POS / termica per nome
-    $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin" } | Select-Object -First 1
-    if ($pPos) {
-        $PrinterName = $pPos.Name
+    try {
+        $cimDef = Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1
+        if ($cimDef -and $cimDef.Name) { return $cimDef.Name }
+    } catch {}
+
+    try {
+        $wmiDef = Get-WmiObject -Query "SELECT Name FROM Win32_Printer WHERE Default = True" | Select-Object -First 1
+        if ($wmiDef -and $wmiDef.Name) { return $wmiDef.Name }
+    } catch {}
+
+    return $null
+}
+
+# 3. Risoluzione della stampante target:
+# Se il nome passato esiste già tra le stampanti installate, lo usiamo direttamente!
+if ($PrinterName -and ($allPrinters -contains $PrinterName)) {
+    # Nome valido e presente tra le stampanti di Windows: usa direttamente
+} else {
+    # Altrimenti cerchiamo:
+    # A. La stampante predefinita di Windows
+    $defP = Get-WindowsDefaultPrinter
+    if ($defP) {
+        $PrinterName = $defP
     } else {
-        # 2. Stampante predefinita di Windows
-        $pDef = Get-CimInstance Win32_Printer | Where-Object Default | Select-Object -First 1
-        if ($pDef) {
-            $PrinterName = $pDef.Name
+        # B. Una stampante POS/termica riconosciuta dal nome
+        $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin" } | Select-Object -First 1
+        if ($pPos) {
+            $PrinterName = $pPos.Name
         } else {
-            # 3. Prima stampante disponibile
+            # C. La prima stampante disponibile nel sistema
             $pAny = Get-CimInstance Win32_Printer | Select-Object -First 1
             if ($pAny) { $PrinterName = $pAny.Name }
         }
@@ -35,31 +60,32 @@ if ($isDummy) {
 }
 
 if (-not $PrinterName) {
-    Write-Error "Nessuna stampante di sistema trovata su Windows."
+    Write-Error "Nessuna stampante trovata su Windows."
     exit 1
 }
 
+# 4. Helper Win32 Spooler ad altissime prestazioni e compatibilità Unicode
 $csharpSource = @"
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
 public class RawPrinterHelper {
-    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
-    public class DOCINFOA {
-        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
-        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
-        [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+    public class DOCINFOW {
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPWStr)] public string pDataType;
     }
 
-    [DllImport("winspool.Drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
-    public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
+    [DllImport("winspool.Drv", EntryPoint="OpenPrinterW", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPWStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
 
     [DllImport("winspool.Drv", EntryPoint="ClosePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
     public static extern bool ClosePrinter(IntPtr hPrinter);
 
-    [DllImport("winspool.Drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
-    public static extern bool StartDocPrinter(IntPtr hPrinter, Int32 level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA di);
+    [DllImport("winspool.Drv", EntryPoint="StartDocPrinterW", SetLastError=true, CharSet=CharSet.Unicode, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+    public static extern int StartDocPrinter(IntPtr hPrinter, Int32 level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOW di);
 
     [DllImport("winspool.Drv", EntryPoint="EndDocPrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
     public static extern bool EndDocPrinter(IntPtr hPrinter);
@@ -83,16 +109,25 @@ public class RawPrinterHelper {
         Marshal.Copy(bytes, 0, pUnmanagedBytes, nLength);
 
         IntPtr hPrinter = IntPtr.Zero;
-        DOCINFOA di = new DOCINFOA();
+        DOCINFOW di = new DOCINFOW();
         di.pDocName = "SagraPOS Scontrino";
         di.pDataType = "RAW";
 
         bool bSuccess = false;
         if (OpenPrinter(szPrinterName, out hPrinter, IntPtr.Zero)) {
-            if (StartDocPrinter(hPrinter, 1, di)) {
+            if (StartDocPrinter(hPrinter, 1, di) > 0) {
                 if (StartPagePrinter(hPrinter)) {
-                    int dwWritten = 0;
-                    bSuccess = WritePrinter(hPrinter, pUnmanagedBytes, nLength, out dwWritten);
+                    int totalWritten = 0;
+                    bSuccess = true;
+                    while (totalWritten < nLength) {
+                        int written = 0;
+                        IntPtr pCurrent = new IntPtr(pUnmanagedBytes.ToInt64() + totalWritten);
+                        if (!WritePrinter(hPrinter, pCurrent, nLength - totalWritten, out written) || written <= 0) {
+                            bSuccess = false;
+                            break;
+                        }
+                        totalWritten += written;
+                    }
                     EndPagePrinter(hPrinter);
                 }
                 EndDocPrinter(hPrinter);
