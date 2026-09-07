@@ -420,14 +420,14 @@ function getPrinterConfigForRole(role: string, remotePrinters: PrinterConfig[]):
   };
 }
 
-// ─── Helpers stampa e formattazione colonne 80mm (48 caratteri) ───────────────
+// ─── Helpers stampa e formattazione colonne ─────────────────────────────────
 function applySize(printer: any, sizeStr: string) {
   if (sizeStr === 'GIANT') printer.size(2, 2);
-  else if (sizeStr === 'DOUBLE_HEIGHT') printer.size(1, 2);
-  else printer.size(1, 1);
+  else if (sizeStr === 'DOUBLE_HEIGHT') printer.size(0, 1);
+  else printer.size(0, 0); // 0, 0 = 1x dimensione normale (NO ingrandimento 200%)
 }
 
-function formatTwoColumns(left: string, right: string, width = 40): string {
+function formatTwoColumns(left: string, right: string, width = 32): string {
   const r = String(right || '').trim();
   const maxLeft = Math.max(0, width - r.length - 1);
   const l = (left || '').length > maxLeft ? (left || '').substring(0, maxLeft) : (left || '');
@@ -561,8 +561,8 @@ function cleanReceiptText(str: string): string {
     .trim();
 }
 
-/** Centra una riga su esattamente 'width' caratteri */
-function centerLine(text: string, width = 40): string {
+/** Centra una riga su esattamente 'width' caratteri (utile solo per modalità allineamento a sinistra) */
+function centerLine(text: string, width = 32): string {
   const clean = cleanReceiptText(text);
   if (!clean) return '';
   if (clean.length >= width) return clean.substring(0, width);
@@ -570,11 +570,11 @@ function centerLine(text: string, width = 40): string {
   return ' '.repeat(pad) + clean + ' '.repeat(width - clean.length - pad);
 }
 
-/** Allinea due colonne su esattamente 'width' caratteri */
-function alignTwoColumns(left: string, right: string, width = 40): string {
-  const l = cleanReceiptText(left);
-  const r = cleanReceiptText(right);
-  const maxLeft = Math.max(0, width - r.length - 1);
+/** Allinea due colonne su esattamente 'width' caratteri (default 32 per rotoli termici 58mm/80mm) */
+function alignTwoColumns(left: string, right: string, width = 32): string {
+  const l = cleanReceiptText(left).trim();
+  const r = cleanReceiptText(right).trim();
+  const maxLeft = Math.max(1, width - r.length - 1);
   const truncatedLeft = l.length > maxLeft ? l.substring(0, maxLeft) : l;
   const spaces = Math.max(1, width - truncatedLeft.length - r.length);
   return truncatedLeft + ' '.repeat(spaces) + r;
@@ -582,11 +582,18 @@ function alignTwoColumns(left: string, right: string, width = 40): string {
 
 // ─── Stampa scontrino cliente compatto, centrato ed elegante ─────────────────
 function printScontrino(printer: any, payload: any, settings: any) {
-  const width = getLineWidth(settings);
-  const fontType = settings.bodyFont === 'a' ? 'a' : 'b';
-
-  // 1. Inizializzazione ESC @ + Font B (compatto/elegante) + Allineamento al centro (1B 61 01)
-  printer.font(fontType).size(1, 1).style('normal').align('ct');
+  // 1. Inizializzazione ESC/POS standard:
+  // ESC @ : Reset stampante
+  // ESC ! 0 : Carattere standard 1x (NO ingrandimento 200%)
+  // ESC M 1 : Font B compatto ed elegante (salva 50% di carta)
+  // ESC a 1 : Allineamento centrato hardware
+  printer.pureText('\x1B\x40\x1B\x21\x00');
+  if (settings.bodyFont === 'a') {
+    printer.pureText('\x1B\x4D\x00'); // Font A
+  } else {
+    printer.pureText('\x1B\x4D\x01'); // Font B compatto salva-carta
+  }
+  printer.style('normal').align('ct');
 
   // Logo opzionale se presente
   if (settings.headerLogoBase64) {
@@ -594,37 +601,37 @@ function printScontrino(printer: any, payload: any, settings: any) {
   }
 
   // Bordo superiore centrato
-  printer.text(makeEqLine(width));
+  printer.text(LINE_EQ_32);
 
   // Nome Attività / Evento in Grassetto centrato (1B 45 01)
   const name = cleanReceiptText(settings.headerName || 'SAGRA');
   if (name) {
-    printer.style('b').text(centerLine(name, width)).style('normal');
+    printer.style('b').text(name).style('normal');
   }
 
-  // Eventuali dati aggiuntivi (indirizzo, P.IVA, telefono)
+  // Eventuali dati aggiuntivi (indirizzo / associazione, P.IVA, telefono)
   const addr = settings.headerSubtitle || settings.headerAddress || '';
   if (addr) {
     addr.split('\n').map((l: string) => cleanReceiptText(l).trim()).filter(Boolean).forEach((line: string) => {
-      printer.text(centerLine(line, width));
+      printer.text(line);
     });
   }
   if (settings.headerVat) {
-    printer.text(centerLine(`P.IVA / C.F.: ${cleanReceiptText(settings.headerVat)}`, width));
+    printer.text(`P.IVA / C.F.: ${cleanReceiptText(settings.headerVat)}`);
   }
   if (settings.headerPhone) {
-    printer.text(centerLine(`Tel: ${cleanReceiptText(settings.headerPhone)}`, width));
+    printer.text(`Tel: ${cleanReceiptText(settings.headerPhone)}`);
   }
 
   // Data e Ora centrate
   const orderDate = new Date(payload.createdAt || Date.now());
   const dateStr = orderDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const timeStr = orderDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  printer.text(centerLine(`Data: ${dateStr} - Ora: ${timeStr}`, width));
+  printer.text(`Data: ${dateStr} - Ora: ${timeStr}`);
 
   // Numero Ordine centrato in Grassetto
   const orderNumStr = String(payload.orderNumber || 0).padStart(4, '0');
-  printer.style('b').text(centerLine(`ORDINE #${orderNumStr}`, width)).style('normal');
+  printer.style('b').text(`ORDINE #${orderNumStr}`).style('normal');
 
   // Tavolo o Cliente (se specificato e non generico/asporto)
   if (payload.customerName &&
@@ -633,10 +640,10 @@ function printScontrino(printer: any, payload: any, settings: any) {
     const tableLabel = payload.customerName.toUpperCase().startsWith('TAVOLO')
       ? payload.customerName.toUpperCase().replace(/^TAVOLO\s*/i, 'TAVOLO ')
       : `CLIENTE: ${cleanReceiptText(payload.customerName)}`;
-    printer.text(centerLine(tableLabel, width));
+    printer.text(tableLabel);
   }
 
-  printer.text(makeDashLine(width));
+  printer.text(LINE_DASH_32);
 
   // 2. Tabella Articoli: Allineamento a sinistra (1B 61 00), font compatto
   printer.align('lt');
@@ -653,12 +660,12 @@ function printScontrino(printer: any, payload: any, settings: any) {
     let itemDesc = `${item.quantity}x ${cleanReceiptText(item.product?.name || 'Articolo').toUpperCase()}`;
     if (item.quantity > 1 && item.priceAtTime > 0 && !isOmaggio) {
       const unitStr = `(E ${item.priceAtTime.toFixed(2).replace('.', ',')})`;
-      if (itemDesc.length + unitStr.length + 1 <= width - 8) {
+      if (itemDesc.length + unitStr.length + 1 <= 32 - priceFormatted.length - 1) {
         itemDesc += ` ${unitStr}`;
       }
     }
 
-    printer.text(alignTwoColumns(itemDesc, priceFormatted, width));
+    printer.text(alignTwoColumns(itemDesc, priceFormatted, 32));
 
     // Dettaglio varianti o note con asterisco
     const cleanVariant = item.variantName && !item.variantName.includes('OMAGGIO') ? cleanReceiptText(item.variantName) : '';
@@ -676,33 +683,33 @@ function printScontrino(printer: any, payload: any, settings: any) {
     }
   });
 
-  printer.text(makeDashLine(width));
+  printer.text(LINE_DASH_32);
 
   // 3. Eventuale Subtotale e Sconto
   if (payload.discount && Number(payload.discount) > 0) {
     const subFormatted = subtotalCalc.toFixed(2).replace('.', ',');
-    printer.text(alignTwoColumns('SUBTOTALE', `E ${subFormatted}`, width));
+    printer.text(alignTwoColumns('SUBTOTALE', `E ${subFormatted}`, 32));
     const scontoFormatted = Number(payload.discount).toFixed(2).replace('.', ',');
-    printer.text(alignTwoColumns('SCONTO', `-E ${scontoFormatted}`, width));
-    printer.text(makeDashLine(width));
+    printer.text(alignTwoColumns('SCONTO', `-E ${scontoFormatted}`, 32));
+    printer.text(LINE_DASH_32);
   }
 
   // 4. Totale Centrato in Grassetto (1B 61 01 + 1B 45 01)
   const totFormatted = Number(payload.totalAmount || 0).toFixed(2).replace('.', ',');
   printer.align('ct').style('b');
-  printer.text(centerLine(`TOTALE: E ${totFormatted}`, width));
+  printer.text(`TOTALE: E ${totFormatted}`);
   printer.style('normal');
 
   // 5. Pagamento centrato
   const paymentMethod = payload.paymentType === 'CARD' ? 'PAGAMENTO: POS' : 'PAGAMENTO: CONTANTI';
-  printer.text(centerLine(paymentMethod, width));
-  printer.text(makeDashLine(width));
+  printer.text(paymentMethod);
+  printer.text(LINE_DASH_32);
 
   // 6. Ringraziamento finale centrato (1B 61 01)
   const footer = cleanReceiptText(settings.footerText || 'Grazie e Arrivederci!');
   if (footer) {
     footer.split('\n').map((l: string) => l.trim()).filter(Boolean).forEach((line: string) => {
-      printer.text(centerLine(line, width));
+      printer.text(line);
     });
   }
 
@@ -710,14 +717,16 @@ function printScontrino(printer: any, payload: any, settings: any) {
     printRasterImage(printer, settings.footerLogoBase64, 240);
   }
 
-  // 7. Bordo finale, avanzamento 5 righe (1B 64 05) e taglio carta (1D 56 42 00)
-  printer.text(makeEqLine(width));
-  printer.feed(5);
-  printer.cut();
+  // 7. Bordo finale, avanzamento 4 righe (1B 64 04) e taglio carta (1D 56 42 00)
+  printer.text(LINE_EQ_32);
+  printer.pureText('\x1B\x64\x04\x1D\x56\x42\x00');
 }
 
 // ─── Stampa talloncini comanda compatti e ordinati (Salva-Carta) ─────────────
 function printComande(printer: any, payload: any, settings: any, categoryFilter?: string) {
+  // Se la stampa talloncini per articolo alla cassa è disabilitata, non stampare nulla
+  if (settings.comandaShowHeader === false) return;
+
   const prepList: any[] = [];
 
   payload.items.forEach((item: any) => {
@@ -756,8 +765,6 @@ function printComande(printer: any, payload: any, settings: any, categoryFilter?
 
   if (filtered.length === 0) return;
 
-  const width = getLineWidth(settings);
-  const fontType = settings.bodyFont === 'a' ? 'a' : 'b';
   const orderNumStr = String(payload.orderNumber || 0).padStart(4, '0');
   const timeStr = new Date(payload.createdAt || Date.now()).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
@@ -769,37 +776,38 @@ function printComande(printer: any, payload: any, settings: any, categoryFilter?
   }
 
   filtered.forEach((prep: any) => {
-    printer.font(fontType).size(1, 1).style('normal').align('ct');
+    // Inizializzazione ESC/POS: 1x Font B compatto
+    printer.pureText('\x1B\x40\x1B\x21\x00\x1B\x4D\x01');
+    printer.style('normal').align('ct');
 
-    printer.text(makeEqLine(width));
-    printer.style('b').text(centerLine(`ORDINE #${orderNumStr}`, width)).style('normal');
-    printer.text(centerLine(timeStr, width));
+    printer.text(LINE_EQ_32);
+    printer.style('b').text(`ORDINE #${orderNumStr}`).style('normal');
+    printer.text(timeStr);
     if (tableLabel) {
-      printer.text(centerLine(tableLabel, width));
+      printer.text(tableLabel);
     }
-    printer.text(makeDashLine(width));
+    printer.text(LINE_DASH_32);
 
-    // Articolo in risalto
-    printer.style('b').text(centerLine(`1x ${cleanReceiptText(prep.name).toUpperCase()}`, width)).style('normal');
+    // Articolo in risalto (singola riga compatto in grassetto)
+    printer.style('b').text(`1x ${cleanReceiptText(prep.name).toUpperCase()}`).style('normal');
 
     // Varianti o note
     const cleanVariant = prep.variantName && !prep.variantName.includes('OMAGGIO') ? cleanReceiptText(prep.variantName) : '';
     const cleanNote = cleanReceiptText((prep.note || '').replace(/\[OMAGGIO\]/g, ''));
     if (cleanVariant || cleanNote) {
       const detail = [cleanVariant, cleanNote].filter(Boolean).join(' - ');
-      printer.text(centerLine(`* ${detail}`, width));
+      printer.text(`* ${detail}`);
     }
     if (prep.comboName) {
-      printer.text(centerLine(`[Menu: ${cleanReceiptText(prep.comboName)}]`, width));
+      printer.text(`[Menu: ${cleanReceiptText(prep.comboName)}]`);
     }
 
     if (settings.comandaShowPrice !== false && typeof prep.priceAtTime === 'number' && prep.priceAtTime > 0) {
-      printer.text(centerLine(`E ${prep.priceAtTime.toFixed(2).replace('.', ',')}`, width));
+      printer.text(`E ${prep.priceAtTime.toFixed(2).replace('.', ',')}`);
     }
 
-    printer.text(makeDashLine(width));
-    printer.feed(4);
-    printer.cut();
+    printer.text(LINE_DASH_32);
+    printer.pureText('\x1B\x64\x04\x1D\x56\x42\x00');
   });
 }
 
@@ -986,7 +994,8 @@ async function processJob(job: any) {
       await new Promise<void>((resolve) => {
         printOnAdapter(printerConfig, (printer) => {
           const report = payload.reportData || {};
-          printer.font('a').size(1, 1).style('normal').align('lt');
+          printer.pureText('\x1B\x40\x1B\x21\x00\x1B\x4D\x01');
+          printer.style('normal').align('lt');
           printer.text(LINE_EQ_32);
           const title = payload.type === 'REPORT_Z' ? 'CHIUSURA DI CASSA Z' : 'LETTURA X (RESOCONTO)';
           printer.text(centerLine(title, 32));
@@ -1031,7 +1040,7 @@ async function processJob(job: any) {
           const endMsg = payload.type === 'REPORT_Z' ? '*** FINE CHIUSURA Z ***' : '*** FINE LETTURA X ***';
           printer.text(centerLine(endMsg, 32));
           printer.text(LINE_EQ_32);
-          printer.text(' ').cut();
+          printer.pureText('\x1B\x64\x04\x1D\x56\x42\x00');
         }, resolve);
       });
 
@@ -1048,7 +1057,8 @@ async function processJob(job: any) {
 
       await new Promise<void>((resolve) => {
         printOnAdapter(printerConfig, (printer) => {
-          printer.font('a').size(1, 1).style('normal').align('lt');
+          printer.pureText('\x1B\x40\x1B\x21\x00\x1B\x4D\x01');
+          printer.style('normal').align('lt');
           printer.text(LINE_EQ_32);
           printer.text(centerLine('STORNO ORDINE', 32));
           printer.text(LINE_EQ_32);
@@ -1064,7 +1074,7 @@ async function processJob(job: any) {
           printer.text(LINE_DASH_32);
           printer.style('b').text(alignTwoColumns('TOTALE STORNO:', `-E ${order.totalAmount.toFixed(2)}`, 32)).style('normal');
           printer.text(LINE_EQ_32);
-          printer.text(' ').cut();
+          printer.pureText('\x1B\x64\x04\x1D\x56\x42\x00');
         }, resolve);
       });
 

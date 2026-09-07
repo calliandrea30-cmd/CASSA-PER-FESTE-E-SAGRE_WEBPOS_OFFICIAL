@@ -1063,6 +1063,17 @@ export default function AdminDashboard() {
                   </div>
 
                   <div>
+                    <label className="text-xs font-bold text-neutral uppercase tracking-wider block mb-1">Sottotitolo / Dati Aggiuntivi (es. Associazione o Località)</label>
+                    <input
+                      type="text"
+                      placeholder="es. Pro Loco Cavaglio d'Agogna"
+                      value={settings.headerSubtitle}
+                      onChange={e => setSettings(s => ({ ...s, headerSubtitle: e.target.value }))}
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl p-3 text-sm text-on-background focus:border-primary outline-none"
+                    />
+                  </div>
+
+                  <div>
                     <label className="text-xs font-bold text-neutral uppercase tracking-wider block mb-1">Messaggio di Ringraziamento (Piè di Pagina)</label>
                     <input
                       type="text"
@@ -1076,7 +1087,7 @@ export default function AdminDashboard() {
 
                 {/* Opzioni Comande Articoli */}
                 <div className="bg-surface-container-high p-5 rounded-2xl flex flex-col gap-3">
-                  <h4 className="text-xs font-bold text-neutral uppercase tracking-wider mb-1">Opzioni Stampa Comande</h4>
+                  <h4 className="text-xs font-bold text-neutral uppercase tracking-wider mb-1">Opzioni Stampa Comande (Talloncini)</h4>
 
                   <label className="flex items-center justify-between p-3.5 bg-surface-container-lowest rounded-xl border border-outline-variant cursor-pointer hover:border-primary transition-colors">
                     <div>
@@ -1087,6 +1098,19 @@ export default function AdminDashboard() {
                       type="checkbox"
                       checked={settings.comandaShowHeader}
                       onChange={e => setSettings(s => ({ ...s, comandaShowHeader: e.target.checked }))}
+                      className="w-5 h-5 accent-primary cursor-pointer"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-3.5 bg-surface-container-lowest rounded-xl border border-outline-variant cursor-pointer hover:border-primary transition-colors">
+                    <div>
+                      <div className="font-bold text-sm text-on-background">Mostra prezzo sul talloncino comanda</div>
+                      <div className="text-xs text-neutral">Stampa l&apos;importo dell&apos;articolo anche sul tagliando comanda</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.comandaShowPrice}
+                      onChange={e => setSettings(s => ({ ...s, comandaShowPrice: e.target.checked }))}
                       className="w-5 h-5 accent-primary cursor-pointer"
                     />
                   </label>
@@ -1132,17 +1156,22 @@ export default function AdminDashboard() {
 
                 {/* Scontrino compatto ed elegante */}
                 <div className="w-full max-w-[280px] bg-white text-black p-5 rounded-2xl font-mono text-[11px] shadow-lg border border-neutral/20 leading-tight">
-                  <div className="text-center select-none text-neutral/40 text-[10px]">========================================</div>
+                  <div className="text-center select-none text-neutral/40 text-[10px]">================================</div>
                   <div className="text-center font-bold text-[13px] tracking-wide my-1">
                     {settings.headerName || "SAGRA DEL BORGO"}
                   </div>
+                  {settings.headerSubtitle && (
+                    <div className="text-center text-[10px] text-neutral/80 whitespace-pre-line mb-1">
+                      {settings.headerSubtitle}
+                    </div>
+                  )}
                   <div className="text-center text-[10px] text-neutral/70">
                     Data: 07/09/2026 - Ora: 18:35
                   </div>
                   <div className="text-center font-bold text-[11px] mt-0.5 mb-1">
                     ORDINE #0042
                   </div>
-                  <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
+                  <div className="text-center select-none text-neutral/40 text-[10px]">--------------------------------</div>
 
                   {/* Righe articoli */}
                   <div className="space-y-1 my-2 text-[10.5px]">
@@ -1159,45 +1188,50 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
+                  <div className="text-center select-none text-neutral/40 text-[10px]">--------------------------------</div>
 
                   {/* Totale centrato */}
                   <div className="text-center font-black text-[13px] my-1 tracking-wide">
-                    TOTALE: € 11,50
+                    TOTALE: E 11,50
                   </div>
                   <div className="text-center text-[10px] text-neutral/80 uppercase font-bold">
                     PAGAMENTO: CONTANTI
                   </div>
 
-                  <div className="text-center select-none text-neutral/40 text-[10px] mt-1">----------------------------------------</div>
+                  <div className="text-center select-none text-neutral/40 text-[10px] mt-1">--------------------------------</div>
 
                   {/* Messaggio finale centrato */}
                   <div className="text-center font-bold text-[10.5px] my-1 text-neutral/80">
                     {settings.footerText || "Grazie e Arrivederci!"}
                   </div>
-                  <div className="text-center select-none text-neutral/40 text-[10px]">========================================</div>
+                  <div className="text-center select-none text-neutral/40 text-[10px]">================================</div>
                 </div>
 
                 {settings.comandaShowHeader && (
                   <div className="w-full max-w-[280px] bg-white text-black p-4 rounded-xl font-mono text-[10.5px] shadow-md border border-neutral/20 leading-tight mt-4">
                     <div className="text-[9px] text-neutral text-center uppercase tracking-widest mb-1 font-sans font-bold">
-                      Talloncino Articolo
+                      Talloncino Comanda (Salva-Carta)
                     </div>
-                    <div className="text-center select-none text-neutral/40 text-[10px]">========================================</div>
+                    <div className="text-center select-none text-neutral/40 text-[10px]">================================</div>
                     <div className="text-center font-bold text-[12px] my-0.5">
                       ORDINE #0042
                     </div>
                     <div className="text-center text-[10px] text-neutral/70">
                       18:35
                     </div>
-                    <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
+                    <div className="text-center select-none text-neutral/40 text-[10px]">--------------------------------</div>
                     <div className="text-center font-bold text-[12px] my-1">
                       1x PANINO SALAMINA
                     </div>
                     <div className="text-center text-[9.5px] text-neutral/70">
                       * Senza cipolla
                     </div>
-                    <div className="text-center select-none text-neutral/40 text-[10px]">----------------------------------------</div>
+                    {settings.comandaShowPrice && (
+                      <div className="text-center text-[10.5px] font-bold mt-0.5">
+                        E 5,00
+                      </div>
+                    )}
+                    <div className="text-center select-none text-neutral/40 text-[10px]">--------------------------------</div>
                   </div>
                 )}
               </div>

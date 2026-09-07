@@ -14,17 +14,52 @@ export default async function (fastify: FastifyInstance) {
   });
 
   // ── PUT /settings ─────────────────────────────────────────────────────────
-  fastify.put('/settings', async (request: any) => {
-    const data = request.body;
+  fastify.put('/settings', async (request: any, reply) => {
+    try {
+      const data = request.body || {};
 
-    // Rimuoviamo campi non previsti dallo schema per evitare errori Prisma
-    const { id: _id, createdAt: _c, updatedAt: _u, ...safeData } = data;
+      const VALID_SETTING_KEYS = [
+        'headerName',
+        'headerSubtitle',
+        'headerAddress',
+        'headerVat',
+        'headerPhone',
+        'headerAlign',
+        'headerSize',
+        'bodyFont',
+        'showOriginalPrice',
+        'showChangeAndDiscount',
+        'dateFormat',
+        'prepItemSize',
+        'prepNoteSize',
+        'prepShowMetadata',
+        'prepVariantFormat',
+        'footerText',
+        'footerShowCount',
+        'printToDepartments',
+        'headerLogoBase64',
+        'footerLogoBase64',
+        'comandaGreeting',
+        'comandaShowHeader',
+        'comandaShowPrice',
+      ];
 
-    return prisma.setting.upsert({
-      where: { id: 'default' },
-      update: safeData,
-      create: { id: 'default', ...safeData },
-    });
+      const safeData: any = {};
+      for (const key of VALID_SETTING_KEYS) {
+        if (key in data && data[key] !== undefined) {
+          safeData[key] = data[key];
+        }
+      }
+
+      const updated = await prisma.setting.upsert({
+        where: { id: 'default' },
+        update: safeData,
+        create: { id: 'default', ...safeData },
+      });
+      return updated;
+    } catch (err: any) {
+      reply.status(500).send({ error: err.message || 'Errore salvataggio impostazioni' });
+    }
   });
 
   // ── POST /settings/print-test ─────────────────────────────────────────────

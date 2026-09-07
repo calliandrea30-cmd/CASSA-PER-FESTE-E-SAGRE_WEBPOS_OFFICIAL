@@ -16,15 +16,50 @@ async function default_1(fastify) {
         return setting;
     });
     // ── PUT /settings ─────────────────────────────────────────────────────────
-    fastify.put('/settings', async (request) => {
-        const data = request.body;
-        // Rimuoviamo campi non previsti dallo schema per evitare errori Prisma
-        const { id: _id, createdAt: _c, updatedAt: _u, ...safeData } = data;
-        return prisma_1.default.setting.upsert({
-            where: { id: 'default' },
-            update: safeData,
-            create: { id: 'default', ...safeData },
-        });
+    fastify.put('/settings', async (request, reply) => {
+        try {
+            const data = request.body || {};
+            const VALID_SETTING_KEYS = [
+                'headerName',
+                'headerSubtitle',
+                'headerAddress',
+                'headerVat',
+                'headerPhone',
+                'headerAlign',
+                'headerSize',
+                'bodyFont',
+                'showOriginalPrice',
+                'showChangeAndDiscount',
+                'dateFormat',
+                'prepItemSize',
+                'prepNoteSize',
+                'prepShowMetadata',
+                'prepVariantFormat',
+                'footerText',
+                'footerShowCount',
+                'printToDepartments',
+                'headerLogoBase64',
+                'footerLogoBase64',
+                'comandaGreeting',
+                'comandaShowHeader',
+                'comandaShowPrice',
+            ];
+            const safeData = {};
+            for (const key of VALID_SETTING_KEYS) {
+                if (key in data && data[key] !== undefined) {
+                    safeData[key] = data[key];
+                }
+            }
+            const updated = await prisma_1.default.setting.upsert({
+                where: { id: 'default' },
+                update: safeData,
+                create: { id: 'default', ...safeData },
+            });
+            return updated;
+        }
+        catch (err) {
+            reply.status(500).send({ error: err.message || 'Errore salvataggio impostazioni' });
+        }
     });
     // ── POST /settings/print-test ─────────────────────────────────────────────
     fastify.post('/settings/print-test', async (request) => {
