@@ -4,7 +4,24 @@ title SagraPOS Launcher
 chcp 65001 >nul 2>&1
 cls
 
-set "PROJECT_ROOT=%~dp0"
+REM ============================================================================
+REM Identificazione percorso cartella principale
+REM ============================================================================
+set "SCRIPT_DIR=%~dp0"
+if exist "%SCRIPT_DIR%event-pos\package.json" (
+    set "PROJECT_ROOT=%SCRIPT_DIR%event-pos\"
+) else if exist "%SCRIPT_DIR%package.json" (
+    set "PROJECT_ROOT=%SCRIPT_DIR%"
+) else (
+    echo.
+    echo ============================================================================
+    echo [ERRORE] Impossibile localizzare la cartella dei componenti di SagraPOS.
+    echo ============================================================================
+    echo.
+    pause
+    exit /b 1
+)
+
 set "CONFIG_FILE=%PROJECT_ROOT%config.local.json"
 
 echo ============================================================================
@@ -13,70 +30,106 @@ echo                   Sistema POS per Sagre ed Eventi
 echo ============================================================================
 echo.
 
-REM 1. Controllo presenza Node.js
+REM ----------------------------------------------------------------------------
+REM 1. Verifica Node.js
+REM ----------------------------------------------------------------------------
 where node >nul 2>&1
 if errorlevel 1 goto :ERRORE_NODE
 for /f "tokens=*" %%v in ('node --version') do echo [OK] Node.js %%v rilevato.
 
-REM 2. Controllo dipendenze node_modules
+REM ----------------------------------------------------------------------------
+REM 2. Verifica dipendenze (node_modules)
+REM ----------------------------------------------------------------------------
 if not exist "%PROJECT_ROOT%node_modules\" (
     echo.
     echo [INFO] Prima installazione: scarico le librerie necessarie...
-    echo (Questa operazione puo richiedere qualche minuto...)
-    call npm install
-    if errorlevel 1 goto :ERRORE_INSTALL
+    echo (Questa operazione puo richiedere qualche minuto, attendi...)
+    pushd "%PROJECT_ROOT%"
+    cmd /c npm install
+    if errorlevel 1 (
+        popd
+        goto :ERRORE_INSTALL
+    )
+    popd
     echo [OK] Librerie installate con successo!
 )
 
-REM 3. Generazione Prisma Client se mancante
+REM ----------------------------------------------------------------------------
+REM 3. Generazione Database Client Prisma se mancante
+REM ----------------------------------------------------------------------------
 if not exist "%PROJECT_ROOT%node_modules\.prisma\client\" (
-    echo [INFO] Inizializzazione Prisma Database Client...
+    echo [INFO] Inizializzazione Database Client (Prisma)...
     pushd "%PROJECT_ROOT%apps\api"
-    call npx prisma generate
+    cmd /c npx prisma generate
     popd
+    echo [OK] Database Client generato!
 )
 
-REM 4. Compilazione API Server se mancante
+REM ----------------------------------------------------------------------------
+REM 4. Compilazione API Server se non presente
+REM ----------------------------------------------------------------------------
 if not exist "%PROJECT_ROOT%apps\api\dist\index.js" (
     echo [INFO] Compilazione API Server...
     pushd "%PROJECT_ROOT%apps\api"
-    call npx prisma generate
-    call npx tsc
-    if errorlevel 1 goto :ERRORE_BUILD
+    cmd /c npx prisma generate
+    cmd /c npx tsc
+    if errorlevel 1 (
+        popd
+        goto :ERRORE_BUILD
+    )
     popd
     echo [OK] API Server compilato!
 )
 
-REM 5. Compilazione Print Agent se mancante
+REM ----------------------------------------------------------------------------
+REM 5. Compilazione Print Agent se non presente
+REM ----------------------------------------------------------------------------
 if not exist "%PROJECT_ROOT%apps\print-agent\dist\index.js" (
     echo [INFO] Compilazione Print Agent...
     pushd "%PROJECT_ROOT%apps\print-agent"
-    call npx tsc
-    if errorlevel 1 goto :ERRORE_BUILD
+    cmd /c npx tsc
+    if errorlevel 1 (
+        popd
+        goto :ERRORE_BUILD
+    )
     popd
     echo [OK] Print Agent compilato!
 )
 
-REM 6. Compilazione Web App se mancante
+REM ----------------------------------------------------------------------------
+REM 6. Compilazione Web App Next.js se non presente
+REM ----------------------------------------------------------------------------
 if not exist "%PROJECT_ROOT%apps\web\.next\" (
     echo.
     echo ============================================================================
-    echo [INFO] Prima compilazione interfaccia Web (richiede 1-2 minuti)...
+    echo [INFO] Prima compilazione interfaccia Web in corso...
+    echo (Questa operazione richiede circa 1 minuto solo la prima volta, attendi...)
     echo ============================================================================
     pushd "%PROJECT_ROOT%apps\web"
-    call npx next build
-    if errorlevel 1 goto :ERRORE_BUILD
+    cmd /c npx next build
+    if errorlevel 1 (
+        popd
+        goto :ERRORE_BUILD
+    )
     popd
-    echo [OK] Interfaccia Web compilata!
+    echo [OK] Interfaccia Web compilata con successo!
+)
+
+REM ----------------------------------------------------------------------------
+REM 7. Controllo e pulizia vecchie configurazioni errate
+REM ----------------------------------------------------------------------------
+if exist "%CONFIG_FILE%" (
+    findstr /C:"!SERVER_IP!" "%CONFIG_FILE%" >nul 2>&1
+    if not errorlevel 1 del /f /q "%CONFIG_FILE%" >nul 2>&1
 )
 
 :MENU
-set CURRENT_MODE=
+set "CURRENT_MODE="
 if exist "%CONFIG_FILE%" (
     findstr /C:"\"isServer\": true" "%CONFIG_FILE%" >nul 2>&1
-    if not errorlevel 1 set CURRENT_MODE=1
+    if not errorlevel 1 set "CURRENT_MODE=1"
     findstr /C:"\"isServer\": false" "%CONFIG_FILE%" >nul 2>&1
-    if not errorlevel 1 set CURRENT_MODE=2
+    if not errorlevel 1 set "CURRENT_MODE=2"
 )
 
 echo.
@@ -89,9 +142,9 @@ echo   [3] Reset configurazione salvata
 echo ============================================================================
 echo.
 
-set SCELTA=
+set "SCELTA="
 if defined CURRENT_MODE (
-    if "%CURRENT_MODE%"=="1" echo [INFO] Modalita attualmente salvata: [1] CASSA 1 (SERVER)
+    if "%CURRENT_MODE%"=="1" echo [INFO] Modalita attualmente salvata: [1] CASSA 1 (SERVER PRINCIPALE)
     if "%CURRENT_MODE%"=="2" echo [INFO] Modalita attualmente salvata: [2] CASSA AGGIUNTIVA
     echo Premi INVIO per confermare la modalita salvata, o digita 1, 2 o 3:
     set /p "SCELTA=Scelta [default: %CURRENT_MODE%]: "
@@ -105,9 +158,13 @@ if "!SCELTA!"=="" set "SCELTA=1"
 if "%SCELTA%"=="1" goto :MODO_SERVER
 if "%SCELTA%"=="2" goto :MODO_CLIENT
 if "%SCELTA%"=="3" goto :RESET_CONFIG
-echo Scelta non valida, riprova.
+echo.
+echo [ATTENZIONE] Scelta non valida ("%SCELTA%"), riprova.
 goto :MENU
 
+REM ============================================================================
+REM MODALITA 1: CASSA 1 (SERVER PRINCIPALE)
+REM ============================================================================
 :MODO_SERVER
 echo.
 echo ============================================================================
@@ -115,7 +172,7 @@ echo                  AVVIO CASSA 1 (SERVER PRINCIPALE)
 echo ============================================================================
 echo.
 
-REM Rileva indirizzo IP locale su scheda attiva
+REM Rilevamento IP locale IPv4
 set "SERVER_IP=127.0.0.1"
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
     for /f "tokens=1" %%b in ("%%a") do (
@@ -127,7 +184,7 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
     )
 )
 
-REM Salva configurazione server
+REM Salvataggio configurazione server
 (
     echo {
     echo   "isServer": true,
@@ -135,13 +192,13 @@ REM Salva configurazione server
     echo }
 ) > "%CONFIG_FILE%"
 
-REM Allineamento schema database Prisma
+REM Creazione/allineamento tabelle database locale
 echo [INFO] Inizializzazione database locale...
 pushd "%PROJECT_ROOT%apps\api"
-call npx prisma db push --accept-data-loss
+cmd /c npx prisma db push --accept-data-loss
 popd
 
-REM Configura Print Agent locale
+REM Configurazione Print Agent locale
 (
     echo {
     echo   "SERVER_URL": "http://127.0.0.1:3001",
@@ -154,22 +211,22 @@ REM Configura Print Agent locale
 REM Avvio API Server
 echo [INFO] Avvio API Server (porta 3001)...
 pushd "%PROJECT_ROOT%apps\api"
-start "SagraPOS API Server" /min cmd /c "set PORT=3001&&set HOST=0.0.0.0&&set NODE_ENV=production&&node dist\index.js || pause"
+start "SagraPOS API Server" /min cmd /k "title SagraPOS API Server && cd /d \"%PROJECT_ROOT%apps\api\" && set PORT=3001 && set HOST=0.0.0.0 && set NODE_ENV=production && node dist\index.js"
 popd
 
 REM Attesa breve
 ping -n 3 127.0.0.1 >nul 2>&1
 
-REM Avvio Interfaccia Web su 0.0.0.0
+REM Avvio Web App
 echo [INFO] Avvio Interfaccia Web (porta 3000)...
 pushd "%PROJECT_ROOT%apps\web"
-start "SagraPOS Web" /min cmd /c "npx next start -p 3000 -H 0.0.0.0 || pause"
+start "SagraPOS Web" /min cmd /k "title SagraPOS Web && cd /d \"%PROJECT_ROOT%apps\web\" && npx next start -p 3000 -H 0.0.0.0"
 popd
 
 REM Avvio Print Agent
 echo [INFO] Avvio Print Agent stampante...
 pushd "%PROJECT_ROOT%apps\print-agent"
-start "SagraPOS Print Agent" /min cmd /c "node dist\index.js || pause"
+start "SagraPOS Print Agent" /min cmd /k "title SagraPOS Print Agent && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
 popd
 
 REM Attesa avvio completo
@@ -187,9 +244,11 @@ echo   * Admin        : http://!SERVER_IP!:3000/admin
 echo   * Cassa mobile : http://!SERVER_IP!:3000
 echo.
 echo   ATTENZIONE: Sull'iPad NON scrivere 'localhost'!
-echo   Usa l'indirizzo con l'IP: http://!SERVER_IP!:3000
+echo   Usa l'indirizzo con l'IP numerico: http://!SERVER_IP!:3000
 echo.
-echo   NON CHIUDERE QUESTA FINESTRA DURANTE IL SERVIZIO!
+echo ============================================================================
+echo   NON CHIUDERE QUESTA FINESTRA! RIMANE APERTA DURANTE IL SERVIZIO.
+echo   Per spegnere SagraPOS a fine serata, premi un tasto qui sotto.
 echo ============================================================================
 echo.
 
@@ -197,6 +256,9 @@ start http://localhost:3000
 pause
 goto :FINE
 
+REM ============================================================================
+REM MODALITA 2: CASSA AGGIUNTIVA (CLIENT)
+REM ============================================================================
 :MODO_CLIENT
 echo.
 echo ============================================================================
@@ -227,7 +289,7 @@ if "!CLIENT_SERVER_IP!"=="" (
 )
 if "!CLIENT_SERVER_IP!"=="" set "CLIENT_SERVER_IP=127.0.0.1"
 
-REM Salva configurazione client
+REM Salvataggio configurazione client
 (
     echo {
     echo   "isServer": false,
@@ -235,7 +297,7 @@ REM Salva configurazione client
     echo }
 ) > "%CONFIG_FILE%"
 
-REM Configura Print Agent locale per cassa aggiuntiva
+REM Configurazione Print Agent locale per cassa aggiuntiva
 (
     echo {
     echo   "SERVER_URL": "http://!CLIENT_SERVER_IP!:3001",
@@ -247,7 +309,7 @@ REM Configura Print Agent locale per cassa aggiuntiva
 
 echo [INFO] Avvio Print Agent per stampanti collegate a questa cassa...
 pushd "%PROJECT_ROOT%apps\print-agent"
-start "SagraPOS Print Agent" /min cmd /c "node dist\index.js || pause"
+start "SagraPOS Print Agent" /min cmd /k "title SagraPOS Print Agent && cd /d \"%PROJECT_ROOT%apps\print-agent\" && node dist\index.js"
 popd
 
 echo.
@@ -257,7 +319,9 @@ echo ===========================================================================
 echo   Server collegato: http://!CLIENT_SERVER_IP!:3000
 echo.
 echo   Il browser si sta aprendo sulla schermata di vendita.
-echo   NON CHIUDERE QUESTA FINESTRA DURANTE IL SERVIZIO!
+echo ============================================================================
+echo   NON CHIUDERE QUESTA FINESTRA! RIMANE APERTA DURANTE IL SERVIZIO.
+echo   Per spegnere SagraPOS a fine serata, premi un tasto qui sotto.
 echo ============================================================================
 echo.
 
@@ -265,6 +329,9 @@ start http://!CLIENT_SERVER_IP!:3000
 pause
 goto :FINE
 
+REM ============================================================================
+REM RESET CONFIGURAZIONE
+REM ============================================================================
 :RESET_CONFIG
 if exist "%CONFIG_FILE%" del /f /q "%CONFIG_FILE%" >nul 2>&1
 echo.
@@ -273,6 +340,9 @@ echo.
 set "CURRENT_MODE="
 goto :MENU
 
+REM ============================================================================
+REM GESTIONE ERRORI E CHIUSURA PROTETTA
+REM ============================================================================
 :ERRORE_NODE
 echo.
 echo ============================================================================
@@ -288,19 +358,30 @@ exit /b 1
 :ERRORE_INSTALL
 echo.
 echo ============================================================================
-echo [ERRORE] Installazione dei componenti fallita.
+echo [ERRORE] Installazione delle librerie fallita.
 echo Verifica la connessione a Internet e riprova.
 echo ============================================================================
+echo.
 pause
 exit /b 1
 
 :ERRORE_BUILD
 echo.
 echo ============================================================================
-echo [ERRORE] Compilazione fallita. Controlla i messaggi sopra riportati.
+echo [ERRORE] Compilazione fallita. Controlla i messaggi di errore sopra riportati.
 echo ============================================================================
+echo.
 pause
 exit /b 1
 
 :FINE
+echo.
+echo ============================================================================
+echo Arresto dei servizi di SagraPOS in corso...
+echo ============================================================================
+taskkill /FI "WINDOWTITLE eq SagraPOS*" /T /F >nul 2>&1
+echo [OK] Tutti i servizi sono stati arrestati.
+echo.
+echo Premi un tasto per chiudere questa finestra...
+pause
 exit /b 0
