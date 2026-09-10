@@ -26,8 +26,15 @@ if (-not $PrinterName -or $PrinterName.Trim() -eq "") {
 
     if (-not $PrinterName) {
         try {
-            $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin" } | Select-Object -First 1
+            $pPos = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "^POS" } | Select-Object -First 1
             if ($pPos) { $PrinterName = $pPos.Name }
+        } catch {}
+    }
+
+    if (-not $PrinterName) {
+        try {
+            $pThermal = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin" } | Select-Object -First 1
+            if ($pThermal) { $PrinterName = $pThermal.Name }
         } catch {}
     }
 }

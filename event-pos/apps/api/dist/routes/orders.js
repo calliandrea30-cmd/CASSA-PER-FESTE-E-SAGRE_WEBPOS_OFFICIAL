@@ -266,12 +266,18 @@ async function default_1(fastify) {
                     },
                 });
                 // ── Routing stampa scontrino (CASHIER) ────────────────────────────
-                // Invio a stanza specifica cassa, a print-agents e in broadcast globale per affidabilità totale
-                if (stationId) {
+                // Invio alla stanza specifica del print-agent della stazione, con fallback a broadcast
+                const rooms = fastify.io.sockets.adapter.rooms;
+                if (stationId && rooms.has(`print-agent:${stationId}`)) {
                     fastify.io.to(`print-agent:${stationId}`).emit('print-job', cashierJob);
                 }
-                fastify.io.to('print-agents').emit('print-job', cashierJob);
-                fastify.io.emit('print-job', cashierJob);
+                else if (rooms.has('print-agents')) {
+                    fastify.io.to('print-agents').emit('print-job', cashierJob);
+                }
+                else {
+                    // Nessun print-agent connesso: broadcast globale come ultimo fallback
+                    fastify.io.emit('print-job', cashierJob);
+                }
                 // ── Stampa remota nei singoli distretti (Cucina, Bar, ecc.) ───────
                 // Inviata SOLO se abilitata nelle impostazioni di stampa!
                 if (settings?.printToDepartments) {

@@ -315,7 +315,7 @@ let cachedPrinters: string[] | null = null;
 let lastCachePrintersTime = 0;
 let cachedDefaultPrinter: string | null = null;
 let lastCacheDefTime = 0;
-const CACHE_TTL_MS = 30000;
+const CACHE_TTL_MS = 120000;
 
 // ─── Cache path di raw-print.exe (risolto una sola volta all'avvio) ─────────────
 let cachedRawExePath: string | null | undefined = undefined; // undefined = non ancora cercato
@@ -392,14 +392,19 @@ function getDefaultSystemPrinter(): string | null {
         const regOut = execSync('reg query "HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Windows" /v Device', { encoding: 'utf8', timeout: 1000 });
         const match = regOut.match(/Device\s+REG_SZ\s+([^,\r\n]+)/i);
         if (match && match[1]) {
-          return match[1].trim();
+          const defPrinter = match[1].trim();
+          console.log(`[Printer Discovery] Stampante predefinita di Windows trovata: "${defPrinter}"`);
+          return defPrinter;
         }
       } catch {}
 
       // Fallback PowerShell
       const cmdDefCim = 'powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | Where-Object { $_.Default -eq $true } | Select-Object -First 1).Name"';
       const outDefCim = execSync(cmdDefCim, { encoding: 'utf8', timeout: 3000 }).trim();
-      if (outDefCim) return outDefCim;
+      if (outDefCim) {
+        console.log(`[Printer Discovery] Stampante predefinita trovata via PowerShell: "${outDefCim}"`);
+        return outDefCim;
+      }
     } else {
       const dOut = execSync('lpstat -d 2>/dev/null || true', { encoding: 'utf8', timeout: 2000 });
       const dMatch = dOut.match(/:\s*([^\r\n]+)/);
@@ -410,11 +415,28 @@ function getDefaultSystemPrinter(): string | null {
   } catch {}
 
   const printers = getCachedPrinters();
-  // 2. Se non impostata una predefinita, cerca una stampante POS / termica per nome
-  const posPrinter = printers.find(p => /POS|80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin/i.test(p));
-  if (posPrinter) return posPrinter;
+  console.log(`[Printer Discovery] Stampanti installate nel sistema: [${printers.map(p => `"${p}"`).join(', ')}]`);
 
-  // 3. Fallback sulla prima stampante installata
+  // 2. Cerca una stampante che contiene "POS" nel nome (es. "POS-80", "POS-58", "POS Thermal")
+  const posPrinter = printers.find(p => /\bPOS\b/i.test(p) || p.toUpperCase().startsWith('POS'));
+  if (posPrinter) {
+    console.log(`[Printer Discovery] ✅ Stampante POS trovata per nome: "${posPrinter}"`);
+    return posPrinter;
+  }
+
+  // 3. Se non c'è una stampante "POS", cerca altri pattern noti di stampanti termiche
+  const thermalPrinter = printers.find(p => /80|58|Thermal|Receipt|Xprinter|Epson|Custom|Stampante|Scontrin/i.test(p));
+  if (thermalPrinter) {
+    console.log(`[Printer Discovery] Stampante termica trovata per pattern: "${thermalPrinter}"`);
+    return thermalPrinter;
+  }
+
+  // 4. Fallback sulla prima stampante installata
+  if (printers[0]) {
+    console.log(`[Printer Discovery] Nessuna stampante POS trovata, uso la prima disponibile: "${printers[0]}"`);
+  } else {
+    console.warn('[Printer Discovery] ⚠️ NESSUNA STAMPANTE TROVATA nel sistema! Collegare una stampante POS e impostarla come predefinita.');
+  }
   return printers[0] || null;
 }
 

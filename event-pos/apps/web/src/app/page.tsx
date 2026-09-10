@@ -403,8 +403,8 @@ export default function POS() {
   // ── Utilities ──────────────────────────────────────────────────────────────
   const getStockColor = (stock: number | undefined | null) => {
     if (stock === undefined || stock === null) return "bg-success";
-    if (stock <= 0) return "bg-error";
-    if (stock <= 10) return "bg-yellow-400";
+    if (stock < 10) return "bg-error";
+    if (stock <= 20) return "bg-yellow-400";
     return "bg-success";
   };
 
